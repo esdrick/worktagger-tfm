@@ -1,0 +1,8 @@
+streamlit==1.38.0
+pandas
+nbformat
+nbconvert
+scikit-llm==0.4.2
+openpyxl
+plotly
+seaborn
