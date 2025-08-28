@@ -6,3 +6,4 @@ scikit-llm==0.4.2
 openpyxl
 plotly
 seaborn
+streamlit-extras

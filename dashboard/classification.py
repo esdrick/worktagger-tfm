@@ -7,6 +7,7 @@ import analysis as wt
 from heuristic_rules import clasificar_por_heuristica
 from heuristic_eisenhower import clasificar_eisenhower_por_heuristica
 import clasificacion_core_act
+import streamlit as st
 
 # Added missing imports for undefined references
 from config.constants import EISEN_OPTIONS
@@ -102,7 +103,7 @@ def manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_s
             logging.exception("There was an error saving Eisenhower label", exc_info=e)
             st.error("Error saving")
 
-    st.markdown("### Eisenhower Quadrant")
+    st.markdown("## Eisenhower Quadrant")
     eisen_options = EISEN_OPTIONS
     st.selectbox(
         "Eisenhower quadrant",
@@ -115,20 +116,13 @@ def manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_s
     )
 
     # --- Etiquetado automático de Eisenhower con GPT (debajo del manual) ---
-    st.markdown("#### 🧠 Clasificación automática con GPT")
-
-    # Selector de tipo de datos a clasificar
-    st.selectbox("Choose what data you want to classify", ["All", "Selected rows"], key="eisen_data_type", index=0)
-
-    # Checkbox para cambiar entre OpenAI y OpenRouter
-    st.sidebar.checkbox("Usar OpenAI (en lugar de OpenRouter)", key="usar_openai")
-
-    # Campos para clave API
-    st.text_input("🔐 OpenRouter Key", type="password", key="openai_key_eisen")
-    st.text_input("🔑 OpenRouter Org (opcional)", type="password", key="openai_org_eisen")
-
-    # Botón para ejecutar
-    st.button("🏷️ Etiquetar automáticamente con GPT", on_click=classify_eisenhower_auto)
+    with st.expander("🧠 Clasificación automática con GPT"):
+        with st.form(key="eisen_gpt_classification_form", clear_on_submit=True):
+            st.selectbox("Choose what data you want to classify", ["All", "Selected rows"], key="eisen_data_type", index=0)
+            st.checkbox("Usar OpenAI (en lugar de OpenRouter)", key="usar_openai")
+            st.text_input("🔐 OpenRouter Key", type="password", key="openai_key_eisen")
+            st.text_input("🔑 OpenRouter Org (opcional)", type="password", key="openai_org_eisen")
+            st.form_submit_button("🏷️ Etiquetar automáticamente", on_click=classify_eisenhower_auto)
 
 # --- Eisenhower automatic classification function (moved to top-level) ---
 def classify_eisenhower_auto():
@@ -320,22 +314,20 @@ def heuristic_prediction():
         st.success("Heuristic prediction successfully applied.")
 
     with st.expander("🧠 Heuristic Prediction based on App and Title"):
-        st.markdown("This tool predicts a base category for each activity based on the app and window title.")
-        st.selectbox("Choose what data you want to classify", ["All", "Selected rows"], key="heuristic_data_type", index=0)
-        st.form(key='heuristic_prediction_form', clear_on_submit=True).form_submit_button("Predict categories", on_click=run_prediction)
-
+        with st.form(key='heuristic_prediction_form', clear_on_submit=True):
+            st.markdown("This tool predicts a base category for each activity based on the app and window title.")
+            st.selectbox("Choose what data you want to classify", ["All", "Selected rows"], key="heuristic_data_type", index=0)
+            st.form_submit_button("Predict categories", on_click=run_prediction)
+        
 # --- Eisenhower heuristic sidebar function ---
 def eisenhower_heuristic_sidebar():
     with st.expander("🧠 Clasificación heurística de Eisenhower"):
-        st.markdown("Este módulo aplica una clasificación heurística (sin usar GPT) a las actividades según su subactividad.")
-        
-        if "df_original" not in st.session_state:
-            st.warning("Carga un archivo para habilitar esta opción.")
-            return
-        
-        st.selectbox("Selecciona qué datos quieres clasificar", ["All", "Selected rows"], key="eisen_data_type_heuristic", index=0)
-
         with st.form(key="heuristic_eisenhower_form", clear_on_submit=True):
+            st.markdown("Este módulo aplica una clasificación heurística (sin usar GPT) a las actividades según su subactividad.")
+            if "df_original" not in st.session_state:
+                st.warning("Carga un archivo para habilitar esta opción.")
+                return
+            st.selectbox("Selecciona qué datos quieres clasificar", ["All", "Selected rows"], key="eisen_data_type_heuristic", index=0)
             st.form_submit_button("🏷️ Clasificar heurísticamente", on_click=classify_eisenhower_heuristic)
 
 
@@ -436,7 +428,7 @@ def classify_eisenhower_heuristic():
         st.error("Error inesperado durante la clasificación heurística.")
 
 def cases_classification():
-    from config.constants import dicc_core_color
+    dicc_core_color = st.session_state.get("dicc_core_color", {})
     def apply_label_to_selection(**kwargs):
         if "df_original" not in st.session_state or "filas_seleccionadas" not in st.session_state:
             st.warning("No hay filas seleccionadas o no se ha cargado el dataset.")

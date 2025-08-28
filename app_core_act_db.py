@@ -5,6 +5,7 @@ import math
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+import streamlit as s
 
 import clasificacion_core_act
 import core_act as activities_loader
@@ -12,7 +13,7 @@ import analysis as wt
 import views
 
 from utils.styles import change_color
-from dashboard.eisenhower import plot_eisenhower_matrix
+from dashboard.eisenhower import plot_eisenhower_matrix_plotly as plot_eisenhower_matrix
 from dashboard.recommendations import show_productivity_recommendations
 from dashboard.chatbot import show_productivity_chatbot
 from dashboard.charts import show_activity_dashboard
@@ -21,7 +22,8 @@ from dashboard.classification import (
     eisenhower_heuristic_sidebar,
     heuristic_prediction,
     automated_classification,
-    heuristic_classification
+    heuristic_classification,
+    cases_classification
 )
 
 from config.constants import EISEN_OPTIONS
@@ -131,7 +133,9 @@ def to_csv(df):
     return output.getvalue().decode('utf-8')
 
 def download_csv(df):
-    excel_data = to_csv(df.drop(columns=['Change', 'Begin Time', 'Ending Time', 'ID']))
+    drop_cols = ['Change', 'Begin Time', 'Ending Time', 'ID']
+    df_clean = df.drop(columns=drop_cols, errors='ignore')
+    excel_data = to_csv(df_clean)
     st.download_button(
         label="⬇️ Download CSV",
         data=excel_data,
@@ -204,7 +208,10 @@ def display_events_table(df, format_table, batch_size, column_config, column_ord
 
 
     # Filter rows that have been selected
-    filas_seleccionadas = edited_df[edited_df['Change']]
+    if 'Change' in edited_df.columns:
+        filas_seleccionadas = edited_df[edited_df['Change']]
+    else:
+        filas_seleccionadas = pd.DataFrame()
     st.session_state.filas_seleccionadas = filas_seleccionadas
 
     return filas_seleccionadas
@@ -258,14 +265,15 @@ def display_label_palette(selected_df):
     else:
         try:
             st.title("Label cases")
+            cases_classification()
             # Classification logic for cases is now handled in dashboard/classification.py
             st.title("Label activities")
             # Clasificación automática primero, luego heurística, luego manual
             automated_classification(view_options, mensaje_container)
-
             heuristic_classification()
-
+            heuristic_prediction()
             manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_sub, apply_label_to_selection, change_color)
+            eisenhower_heuristic_sidebar()
         except Exception as e:
             logging.exception(f"There was an error while displaying the sidebar", exc_info=e)
             st.error("There was an error processing the request. Try again")
@@ -323,9 +331,11 @@ div[data-testid="stExpander"] {
 
 
 dicc_core, dicc_subact, dicc_map_subact, dicc_core_color = load_activities()
+st.session_state["dicc_core_color"] = dicc_core_color
 all_sub = [f"{s} - {c}" for c in dicc_subact for s in dicc_subact[c]]
 
-with st.expander("📁 Upload your data", expanded=True):
+upload_expanded = "df_original" not in st.session_state
+with st.expander("📁 Upload your data", expanded=upload_expanded):
     st.markdown("""
     Upload your Tockler data file (`CSV` or `tracker.db`) exported from Tockler.
     You can obtain it from: **Tockler > Search > Export**, or locate `tracker.db` manually.
@@ -356,6 +366,50 @@ with st.expander("📁 Upload your data", expanded=True):
     """)
 
     load_sample_data = st.button("🔄 Load sample data", type="primary", on_click=changed_file)
+    
+# --- Separador visual ---
+if "df_original" in st.session_state:
+    # Asegura que se marque como cargado correctamente después de asignar df_original
+    if "navbar_selection" not in st.session_state:
+        st.session_state["navbar_selection"] = "📋 Pantalla principal"
+
+    st.markdown("---")
+    with st.container():
+        # Estilos solo para navbar
+        st.markdown("""
+            <style>
+            div[data-testid="column"] button {
+                height: 100px !important;
+                white-space: normal !important;
+                font-size: 16px !important;
+                font-weight: bold !important;
+                text-align: center !important;
+                padding: 10px !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # Opciones de navegación
+        nav_options = {
+            "📋 Pantalla principal": "main",
+            "📊 Dashboard de Actividades": "dashboard",
+            "🧭 Matriz de Eisenhower – Ver detalle por subactividad": "matrix",
+            "🤖 Asistente de productividad (beta)": "assistant"
+        }
+
+        # Crear columnas para los botones
+        nav_cols = st.columns(len(nav_options))
+
+        # Mostrar botones
+        for idx, (label, value) in enumerate(nav_options.items()):
+            with nav_cols[idx]:
+                if st.button(label, key=label, use_container_width=True):
+                    st.session_state["navbar_selection"] = label
+
+    st.markdown("---")
+
+# Obtener selección actual
+selected_nav = st.session_state.get("navbar_selection", "📋 Pantalla principal")
 
 # Contenedor de mensajes para mostrar estados de carga
 mensaje_container = st.empty()
@@ -432,34 +486,50 @@ if "df_original" not in st.session_state:
             data_expanded['Change'] = False
             # Initialize Eisenhower quadrant label (manual classification)
             data_expanded['Eisenhower'] = None
-        st.session_state.df_original = data_expanded[['Change','ID','Merged_titles','Begin','End','Begin Time','Ending Time', 'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App']]
-
+        expected_columns = ['Change', 'ID', 'Merged_titles', 'Begin', 'End', 'Begin Time', 'Ending Time', 'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App']
+        available_columns = [col for col in expected_columns if col in data_expanded.columns]
+        st.session_state.df_original = data_expanded[available_columns]
         st.session_state.all_cases = set(data_expanded["Case"].dropna().unique())
+
+        # Detectar si cambió el archivo cargado
+        if archivo_cargado is not None:
+            current_filename = archivo_cargado.name
+            if st.session_state.get("previous_file_name") != current_filename:
+                st.session_state["previous_file_name"] = current_filename
+                st.rerun()
+
+        if "file_loaded_once" not in st.session_state:
+            st.session_state["file_loaded_once"] = True
+            st.rerun()
 
 if "df_original" in st.session_state:
     view_options = load_view_options()
 
-    view_type = st.radio(label="Select view", options=view_options.keys(), format_func=lambda x: view_options[x].label, key='view_type', horizontal=True, on_change=reset_current_page)
-    selected_view = view_options[view_type]
+    if selected_nav == "📋 Pantalla principal":
+        view_type = st.radio(
+            label="Select view",
+            options=view_options.keys(),
+            format_func=lambda x: view_options[x].label,
+            key='view_type',
+            horizontal=True,
+            on_change=reset_current_page
+        )
+        selected_view = view_options[view_type]
+        selected_df = selected_view.view_filter(st.session_state.df_original, reset_current_page)
+        format_table = display_table_formatter(selected_view)
+        display_view(selected_view, selected_df, format_table)
+        with st.sidebar:
+            display_label_palette(selected_df)
+            expanded_label_section = selected_nav == "📋 Pantalla principal"
 
-    selected_df = selected_view.view_filter(st.session_state.df_original, reset_current_page)
-
-    format_table = display_table_formatter(selected_view)
-
-    display_view(selected_view, selected_df, format_table)
-
-    with st.sidebar:
-        display_label_palette(selected_df)
-        heuristic_prediction()
-        eisenhower_heuristic_sidebar()
-
-    with st.expander("📊 Dashboard de Actividades", expanded=True):
+    elif selected_nav == "📊 Dashboard de Actividades":
         st.markdown("### 🧩 Panel de Visualizaciones")
         if len(st.session_state.df_original) > 0:
             show_activity_dashboard(st.session_state.df_original)
 
-    with st.expander("🧭 Matriz de Eisenhower – Ver detalle por subactividad", expanded=False):
+    elif selected_nav == "🧭 Matriz de Eisenhower – Ver detalle por subactividad":
         plot_eisenhower_matrix(st.session_state.df_original)
         show_productivity_recommendations()
 
-    show_productivity_chatbot()
+    elif selected_nav == "🤖 Asistente de productividad (beta)":
+        show_productivity_chatbot()
