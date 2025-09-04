@@ -3,28 +3,37 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from config.constants import EISEN_OPTIONS
-from utils.calculations import calculate_productive_time
 
 def show_productivity_recommendations():
     df = st.session_state.df_original.copy()
     df['Duration_min'] = df['Duration'] / 60
     
-    # 🎯 ANÁLISIS INTELIGENTE DE PRODUCTIVIDAD
-    st.markdown("### 🎯 Análisis Inteligente de Productividad")
+    # Verificar que existen datos clasificados
+    df_classified = df[df['Eisenhower'].notna()]
+    if df_classified.empty:
+        st.warning("No activities classified with Eisenhower matrix yet. Please classify some activities first.")
+        return
     
-    # Métricas principales en cards minimalistas
+    # 🎯 INTELLIGENT PRODUCTIVITY ANALYSIS
+    st.markdown("### 🎯 Intelligent Productivity Analysis")
+    
+    # Main metrics in minimalist cards
     tiempo_cuadrante = (
-        df[df['Eisenhower'].notna()]
+        df_classified
         .groupby('Eisenhower')['Duration_min']
         .sum()
     )
     
+    # 🔧 FIX: Cálculo directo usando EISEN_OPTIONS
     total_tiempo = tiempo_cuadrante.sum()
-    tiempo_productivo = calculate_productive_time(st.session_state.df_original)
-    tiempo_improductivo = tiempo_cuadrante.get(EISEN_OPTIONS[3], 0)
+    tiempo_productivo = (
+        tiempo_cuadrante.get(EISEN_OPTIONS[0], 0) +  # "I: Urgent & Important"
+        tiempo_cuadrante.get(EISEN_OPTIONS[1], 0)    # "II: Not urgent but Important"
+    )
+    tiempo_improductivo = tiempo_cuadrante.get(EISEN_OPTIONS[3], 0)  # "IV: Not urgent & Not important"
     eficiencia = (tiempo_productivo / total_tiempo * 100) if total_tiempo > 0 else 0
     
-    # Cards de métricas principales
+    # Main metrics cards
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -41,7 +50,7 @@ def show_productivity_recommendations():
                 {eficiencia:.0f}%
             </div>
             <div style="color: #666; font-size: 14px; margin-top: 4px;">
-                Eficiencia
+                Efficiency
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -60,7 +69,7 @@ def show_productivity_recommendations():
                 {tiempo_productivo:.0f}min
             </div>
             <div style="color: #666; font-size: 14px; margin-top: 4px;">
-                Tiempo productivo
+                Productive time
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -79,14 +88,14 @@ def show_productivity_recommendations():
                 {tiempo_improductivo:.0f}min
             </div>
             <div style="color: #666; font-size: 14px; margin-top: 4px;">
-                Tiempo perdido
+                Time wasted
             </div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
-        # Calcular focus score basado en ratio productivo/improductivo
-        if tiempo_improductivo > 0:
+        # Calculate focus score based on productive/unproductive ratio
+        if tiempo_improductivo > 0 and tiempo_productivo > 0:
             focus_score = max(0, 100 - (tiempo_improductivo / tiempo_productivo * 50))
         else:
             focus_score = 100
@@ -104,21 +113,21 @@ def show_productivity_recommendations():
                 {focus_score:.0f}/100
             </div>
             <div style="color: #666; font-size: 14px; margin-top: 4px;">
-                Índice de foco
+                Focus index
             </div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 📊 GRÁFICO DE DISTRIBUCIÓN INTERACTIVO
+    # 📊 INTERACTIVE DISTRIBUTION CHART
     col_left, col_right = st.columns([2, 1])
     
     with col_left:
-        st.markdown("#### 📊 Distribución del tiempo")
+        st.markdown("#### 📊 Time distribution")
         
         if not tiempo_cuadrante.empty:
-            # Crear gráfico de dona
+            # Create donut chart
             fig = go.Figure(data=[go.Pie(
                 labels=[q.split(':')[1].strip() for q in tiempo_cuadrante.index],
                 values=tiempo_cuadrante.values,
@@ -137,17 +146,17 @@ def show_productivity_recommendations():
             st.plotly_chart(fig, use_container_width=True)
     
     with col_right:
-        st.markdown("#### 🎯 Recomendación IA")
+        st.markdown("#### 🎯 AI Recommendation")
         
-        # Generar recomendación inteligente basada en datos
+        # Generate intelligent recommendation based on data
         if eficiencia >= 80:
-            recomendacion = f"🌟 <strong>Excelente productividad!</strong> Mantén este ritmo y considera compartir tus estrategias."
+            recomendacion = f"🌟 <strong>Excellent productivity!</strong> Keep this pace and consider sharing your strategies."
             color = "#10B981"
         elif eficiencia >= 60:
-            recomendacion = f"📈 <strong>Buen trabajo.</strong> Reduce {tiempo_improductivo:.0f}min de distracciones para mejorar."
+            recomendacion = f"📈 <strong>Good work.</strong> Reduce {tiempo_improductivo:.0f}min of distractions to improve."
             color = "#F59E0B"
         else:
-            recomendacion = f"🚨 <strong>Foco necesario.</strong> Elimina {tiempo_improductivo:.0f}min improductivos y planifica mejor."
+            recomendacion = f"🚨 <strong>Focus needed.</strong> Eliminate {tiempo_improductivo:.0f}min of unproductive time and plan better."
             color = "#EF4444"
         
         st.markdown(f"""
@@ -159,7 +168,7 @@ def show_productivity_recommendations():
             margin-top: 20px;
         ">
             <div style="color: {color}; font-weight: 600; margin-bottom: 8px;">
-                Análisis Personalizado
+                Personalized Analysis
             </div>
             <div style="color: #333; font-size: 14px; line-height: 1.5;">
                 {recomendacion}
@@ -167,59 +176,59 @@ def show_productivity_recommendations():
         </div>
         """, unsafe_allow_html=True)
 
-# 🎮 CONFIGURADOR DE OBJETIVOS INTERACTIVO
-    st.markdown("### 🎮 Configurar Objetivos")
+    # 🎮 INTERACTIVE GOAL CONFIGURATOR
+    st.markdown("### 🎮 Set Goals")
     
     with st.container(border=True):
-        # Agregar espaciado interno
+        # Add internal spacing
         st.markdown("<div style='padding: 16px;'>", unsafe_allow_html=True)
         
-        # Calcular límites dinámicos basados en los datos actuales
-        max_tiempo_total = int(total_tiempo * 1.5)  # 150% del tiempo actual como máximo
-        max_improductivo = max(180, int(tiempo_improductivo * 2))  # Mínimo 3h o el doble del actual
+        # Calculate dynamic limits based on current data
+        max_tiempo_total = int(total_tiempo * 1.5) if total_tiempo > 0 else 480  # 150% of current time as maximum
+        max_improductivo = max(180, int(tiempo_improductivo * 2))  # Minimum 3h or double current
         
-        # Valores RECOMENDADOS basados en estudios de productividad
-        if total_tiempo > 2000:  # Más de 33 horas = análisis semanal/mensual
-            # Basado en semana laboral de 40h (2400 min)
-            tiempo_recomendado_productivo = int(total_tiempo * 0.65)  # 65% productivo (estándar)
-            tiempo_recomendado_improductivo = int(total_tiempo * 0.15)  # 15% improductivo máximo
-            periodo_texto = "para este periodo"
-        else:  # Análisis diario
-            # Día laboral de 8h = 480 min
-            tiempo_recomendado_productivo = min(480, int(total_tiempo * 0.65))
-            tiempo_recomendado_improductivo = min(60, int(total_tiempo * 0.15))
-            periodo_texto = "diarios"
+        # RECOMMENDED values based on productivity studies
+        if total_tiempo > 2000:  # More than 33 hours = weekly/monthly analysis
+            # Based on 40h work week (2400 min)
+            tiempo_recomendado_productivo = int(total_tiempo * 0.65)  # 65% productive (standard)
+            tiempo_recomendado_improductivo = int(total_tiempo * 0.15)  # 15% unproductive maximum
+            periodo_texto = "for this period"
+        else:  # Daily analysis
+            # 8h work day = 480 min
+            tiempo_recomendado_productivo = min(480, int(total_tiempo * 0.65)) if total_tiempo > 0 else 320
+            tiempo_recomendado_improductivo = min(60, int(total_tiempo * 0.15)) if total_tiempo > 0 else 60
+            periodo_texto = "daily"
         
         col1, col2 = st.columns(2)
         
         with col1:
             objetivo_productivo = st.slider(
-                f"🎯 Tiempo productivo objetivo {periodo_texto} (minutos)",
+                f"🎯 Target productive time {periodo_texto} (minutes)",
                 min_value=60, 
                 max_value=max_tiempo_total, 
-                value=tiempo_recomendado_productivo,  # Usar valor recomendado
+                value=tiempo_recomendado_productivo,  # Use recommended value
                 step=30,
-                help="Combina cuadrantes I y II (Importante)"
+                help="Combines quadrants I and II (Important)"
             )
-            # Mostrar recomendación específica debajo del slider
-            st.caption(f"💡 **Recomendado**: {tiempo_recomendado_productivo} min ({tiempo_recomendado_productivo/60:.1f}h) - Basado en estándares laborales")
+            # Show specific recommendation below slider
+            st.caption(f"💡 **Recommended**: {tiempo_recomendado_productivo} min ({tiempo_recomendado_productivo/60:.1f}h) - Based on work standards")
             
         with col2:
             limite_improductivo = st.slider(
-                f"🚫 Límite de tiempo improductivo {periodo_texto} (minutos)",
+                f"🚫 Unproductive time limit {periodo_texto} (minutes)",
                 min_value=0, 
                 max_value=max_improductivo, 
-                value=tiempo_recomendado_improductivo,  # Usar valor recomendado
+                value=tiempo_recomendado_improductivo,  # Use recommended value
                 step=15,
-                help="Máximo tiempo en cuadrante IV (distracciones)"
+                help="Maximum time in quadrant IV (distractions)"
             )
-            # Mostrar recomendación específica debajo del slider
-            st.caption(f"💡 **Recomendado**: {tiempo_recomendado_improductivo} min ({tiempo_recomendado_improductivo/60:.1f}h) - Máximo 15% del tiempo total")
+            # Show specific recommendation below slider
+            st.caption(f"💡 **Recommended**: {tiempo_recomendado_improductivo} min ({tiempo_recomendado_improductivo/60:.1f}h) - Maximum 15% of total time")
         
-        # Espaciado entre secciones
+        # Spacing between sections
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Progreso hacia objetivos - CORREGIDO
+        # Progress towards goals - CORRECTED
         progreso_productivo = min(100, (tiempo_productivo / objetivo_productivo) * 100) if objetivo_productivo > 0 else 0
         progreso_limite = min(100, (tiempo_improductivo / limite_improductivo) * 100) if limite_improductivo > 0 else 0
         
@@ -228,7 +237,7 @@ def show_productivity_recommendations():
         with col1:
             color_productivo = "#10B981" if progreso_productivo >= 100 else "#F59E0B" if progreso_productivo >= 80 else "#EF4444"
             st.markdown(f"""
-            **Progreso productivo: {progreso_productivo:.0f}%** ({tiempo_productivo:.0f}/{objetivo_productivo} min)
+            **Productive progress: {progreso_productivo:.0f}%** ({tiempo_productivo:.0f}/{objetivo_productivo} min)
             <div style="background: #e9ecef; border-radius: 10px; height: 20px; overflow: hidden; margin-top: 8px;">
                 <div style="background: {color_productivo}; height: 100%; width: {min(100, progreso_productivo)}%; transition: width 0.3s;"></div>
             </div>
@@ -237,24 +246,24 @@ def show_productivity_recommendations():
         with col2:
             color_limite = "#EF4444" if progreso_limite > 100 else "#F59E0B" if progreso_limite > 80 else "#10B981"
             st.markdown(f"""
-            **Uso improductivo: {progreso_limite:.0f}%** ({tiempo_improductivo:.0f}/{limite_improductivo} min)
+            **Unproductive usage: {progreso_limite:.0f}%** ({tiempo_improductivo:.0f}/{limite_improductivo} min)
             <div style="background: #e9ecef; border-radius: 10px; height: 20px; overflow: hidden; margin-top: 8px;">
                 <div style="background: {color_limite}; height: 100%; width: {min(100, progreso_limite)}%; transition: width 0.3s;"></div>
             </div>
             """, unsafe_allow_html=True)
         
-        # Cerrar el div de padding
+        # Close padding div
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # 🚫 APPS PROBLEMÁTICAS CON MEJOR DISEÑO
-    st.markdown("### 🚫 Apps que Reducir")
+    # 🚫 PROBLEMATIC APPS WITH BETTER DESIGN
+    st.markdown("### 🚫 Apps to Reduce")
     
     df_apps = df[df["Eisenhower"] == EISEN_OPTIONS[3]].groupby("App")["Duration_min"].sum().sort_values(ascending=False)
     
     if not df_apps.empty:
         for i, (app, tiempo) in enumerate(df_apps.head(5).items()):
-            if tiempo >= 10:  # Solo mostrar apps con uso significativo
-                urgencia = "🔴 Crítico" if tiempo >= 60 else "🟡 Moderado" if tiempo >= 30 else "🟢 Leve"
+            if tiempo >= 10:  # Only show apps with significant usage
+                urgencia = "🔴 Critical" if tiempo >= 60 else "🟡 Moderate" if tiempo >= 30 else "🟢 Minor"
                 
                 st.markdown(f"""
                 <div style="
@@ -269,7 +278,7 @@ def show_productivity_recommendations():
                 ">
                     <div>
                         <strong>{app}</strong><br>
-                        <span style="color: #666; font-size: 14px;">{tiempo:.0f} minutos desperdiciados</span>
+                        <span style="color: #666; font-size: 14px;">{tiempo:.0f} minutes wasted</span>
                     </div>
                     <div style="text-align: right;">
                         <span style="font-size: 12px;">{urgencia}</span><br>
@@ -278,20 +287,20 @@ def show_productivity_recommendations():
                 </div>
                 """, unsafe_allow_html=True)
     else:
-        st.success("🎉 ¡No hay apps problemáticas detectadas!")
+        st.success("🎉 No problematic apps detected!")
 
 def generate_smart_insights(df):
-    """Genera insights inteligentes basados en patrones de uso"""
+    """Generate intelligent insights based on usage patterns"""
     insights = []
     
-    # Análisis por hora del día
+    # Analysis by hour of day
     if 'Begin' in df.columns:
         df['Hour'] = pd.to_datetime(df['Begin']).dt.hour
         peak_hours = df.groupby('Hour')['Duration'].sum().sort_values(ascending=False).head(3)
-        insights.append(f"🕐 Tus horas más activas: {', '.join([f'{h}:00' for h in peak_hours.index])}")
+        insights.append(f"🕐 Your most active hours: {', '.join([f'{h}:00' for h in peak_hours.index])}")
     
-    # Análisis de apps más usadas
+    # Most used apps analysis
     top_apps = df.groupby('App')['Duration'].sum().sort_values(ascending=False).head(3)
-    insights.append(f"📱 Apps principales: {', '.join(top_apps.index)}")
+    insights.append(f"📱 Main apps: {', '.join(top_apps.index)}")
     
     return insights

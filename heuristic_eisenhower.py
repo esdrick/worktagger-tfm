@@ -12,7 +12,7 @@ def clasificar_eisenhower_por_heuristica(subactivity):
         "incident resolution", "incident report", "downtime", "server error", "cut off", "resolver ahora",
         "interrupción crítica", "urgente soporte", "problema grave", "error fatal", "colapso"
     ]):
-        return "I: Urgente & Importante"
+        return "I: Urgent & Important"
 
     # No urgente pero Importante
     elif any(k in subactivity for k in [
@@ -25,7 +25,7 @@ def clasificar_eisenhower_por_heuristica(subactivity):
         "content creation", "blogging", "summary", "focus work", "proyecto final", "mejora continua",
         "documentación", "lectura técnica", "modelo productivo"
     ]):
-        return "II: No urgente pero Importante"
+        return "II: Not urgent but Important"
 
     # Urgente pero No importante
     elif any(k in subactivity for k in [
@@ -36,7 +36,7 @@ def clasificar_eisenhower_por_heuristica(subactivity):
         "responder mensaje", "revisar correo", "documento", "solicitud", "enviar archivo", "mensajes internos",
         "reportes", "seguimiento"
     ]):
-        return "III: Urgente pero No importante"
+        return "III: Urgent but Not important"
 
     # No urgente & No importante
     elif any(k in subactivity for k in [
@@ -46,7 +46,7 @@ def clasificar_eisenhower_por_heuristica(subactivity):
         "fun", "distracted", "break", "pausa", "ocio", "descanso", "chismes", "tendencias", "clips", "trending",
         "historias", "reel", "post", "likes", "comentarios", "cuentas", "videos graciosos"
     ]):
-        return "IV: No urgente & No importante"
+        return "IV: Not urgent & Not important"
 
     else:
         return None

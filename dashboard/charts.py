@@ -6,7 +6,7 @@ import pandas as pd
 
 def show_activity_dashboard(df: pd.DataFrame) -> None:
     if df is None or df.empty:
-        st.warning("No hay datos para mostrar en el dashboard.")
+        st.warning("There is no data to display on the dashboard.")
         return
 
     # SINCRONIZAR CON SESSION STATE - SOLUCIONADO
@@ -21,16 +21,16 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
     subactividades_disponibles = sorted(df_graph['Subactivity'].dropna().unique())
     
     if not subactividades_disponibles:
-        st.info("📝 **Para ver visualizaciones, primero etiqueta algunas actividades con subactividades.**")
-        st.markdown("Ve a la **📋 Pantalla principal** y usa las herramientas de la barra lateral para clasificar tus actividades.")
+        st.info("📝 **To see visualizations, first label some activities with subactivities.**")
+        st.markdown("Go to the **📋 Main Screen** and use the sidebar tools to classify your activities.")
         return
 
     # FILTRO MEJORADO 
     subactividades_seleccionadas = st.multiselect(
-        "🔍 Filtrar por subactividad",
+        "🔍 Filter by subactivity",
         options=subactividades_disponibles,
         default=subactividades_disponibles,
-        help="Selecciona una o varias subactividades para visualizar"
+        help="Select one or more subactivities to visualize"
     )
 
     # APLICAR FILTROS
@@ -40,7 +40,7 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
     df_graph = df_graph[df_graph['Subactivity'].notnull()]
 
     if df_graph.empty:
-        st.warning("No hay datos para las subactividades seleccionadas.")
+        st.warning("There is no data for the selected subactivities.")
         return
 
     # PREPARAR DATOS PARA VISUALIZACIONES
@@ -54,13 +54,13 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
     df_line = df_grouped.groupby('Date')['Duration (min)'].sum().reset_index()
 
     # GRÁFICOS MEJORADOS
-    st.markdown("### 📊 Visualizaciones de Actividad")
+    st.markdown("### 📊 Activity Visualizations")
     
     # Fila 1: Distribución y evolución temporal
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 🎯 Distribución por Subactividad")
+        st.markdown("#### 🎯 Distribution by Subactivity")
         
         # Gráfico de dona más moderno
         fig_pie = go.Figure(data=[go.Pie(
@@ -81,7 +81,7 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
         st.plotly_chart(fig_pie, use_container_width=True)
     
     with col2:
-        st.markdown("#### 📈 Evolución Temporal")
+        st.markdown("#### 📈 Time Evolution")
         
         # Línea de tiempo mejorada
         fig_line = px.line(
@@ -99,8 +99,8 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
         fig_line.update_layout(
             height=400,
             margin=dict(t=20, b=20, l=20, r=20),
-            xaxis_title="Fecha",
-            yaxis_title="Tiempo (minutos)"
+            xaxis_title="Date",
+            yaxis_title="Time (minutes)"
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
@@ -108,17 +108,17 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
     col3, col4 = st.columns(2)
     
     with col3:
-        st.markdown("#### 📅 Actividad por Día")
+        st.markdown("#### 📅 Activity by Day")
         
         # Gráfico de barras apiladas más claro
         chart = alt.Chart(df_grouped).mark_bar().encode(
-            x=alt.X('Date:T', title='Fecha'),
-            y=alt.Y('Duration (min):Q', title='Tiempo (min)'),
-            color=alt.Color('Subactivity:N', legend=alt.Legend(title="Subactividades")),
+            x=alt.X('Date:T', title='Date'),
+            y=alt.Y('Duration (min):Q', title='Time (min)'),
+            color=alt.Color('Subactivity:N', legend=alt.Legend(title="Subactivities")),
             tooltip=[
-                alt.Tooltip('Date:T', title='Fecha'),
-                alt.Tooltip('Subactivity:N', title='Subactividad'),
-                alt.Tooltip('Duration (min):Q', title='Tiempo (min)', format='.1f')
+                alt.Tooltip('Date:T', title='Date'),
+                alt.Tooltip('Subactivity:N', title='Subactivity'),
+                alt.Tooltip('Duration (min):Q', title='Time (min)', format='.1f')
             ]
         ).properties(
             height=400
@@ -129,7 +129,7 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
         st.altair_chart(chart, use_container_width=True)
     
     with col4:
-        st.markdown("#### 🕐 Patrón Horario")
+        st.markdown("#### 🕐 Hourly Pattern")
         
         # Heatmap simplificado
         df_heatmap = df_graph.groupby(['Date', 'Hour'])['Duration'].sum().reset_index()
@@ -137,58 +137,58 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
         
         if not df_heatmap.empty:
             heatmap = alt.Chart(df_heatmap).mark_rect().encode(
-                x=alt.X('Hour:O', title='Hora del día', scale=alt.Scale(domain=list(range(24)))),
-                y=alt.Y('Date:T', title='Fecha'),
+                x=alt.X('Hour:O', title='Hour of day', scale=alt.Scale(domain=list(range(24)))),
+                y=alt.Y('Date:T', title='Date'),
                 color=alt.Color(
                     'Duration (min):Q', 
                     scale=alt.Scale(scheme='oranges'),
-                    legend=alt.Legend(title="Tiempo (min)")
+                    legend=alt.Legend(title="Time (min)")
                 ),
                 tooltip=[
-                    alt.Tooltip('Date:T', title='Fecha'),
-                    alt.Tooltip('Hour:O', title='Hora'),
-                    alt.Tooltip('Duration (min):Q', title='Tiempo (min)', format='.1f')
+                    alt.Tooltip('Date:T', title='Date'),
+                    alt.Tooltip('Hour:O', title='Hour'),
+                    alt.Tooltip('Duration (min):Q', title='Time (min)', format='.1f')
                 ]
             ).properties(height=400)
             
             st.altair_chart(heatmap, use_container_width=True)
         else:
-            st.info("No hay suficientes datos para mostrar el patrón horario.")
+            st.info("There is not enough data to show the hourly pattern.")
 
     # TABLA MEJORADA Y ACTUALIZADA
-    st.markdown("### 📋 Resumen Detallado")
+    st.markdown("### 📋 Detailed Summary")
     
     # Agregar métricas calculadas a la tabla
     df_table = df_pie.copy()
-    df_table['Porcentaje'] = (df_table['Duration (min)'] / df_table['Duration (min)'].sum() * 100).round(1)
-    df_table['Tiempo (horas)'] = (df_table['Duration (min)'] / 60).round(2)
+    df_table['Percentage'] = (df_table['Duration (min)'] / df_table['Duration (min)'].sum() * 100).round(1)
+    df_table['Time (hours)'] = (df_table['Duration (min)'] / 60).round(2)
     
     # Reordenar columnas
-    df_table = df_table[['Subactivity', 'Duration (min)', 'Tiempo (horas)', 'Porcentaje']]
-    df_table.columns = ['Subactividad', 'Tiempo (min)', 'Tiempo (h)', 'Porcentaje (%)']
+    df_table = df_table[['Subactivity', 'Duration (min)', 'Time (hours)', 'Percentage']]
+    df_table.columns = ['Subactivity', 'Time (min)', 'Time (h)', 'Percentage (%)']
     
     # Mostrar con formato mejorado
     st.dataframe(
         df_table,
         use_container_width=True,
         column_config={
-            "Tiempo (min)": st.column_config.NumberColumn(
-                "Tiempo (min)",
+            "Time (min)": st.column_config.NumberColumn(
+                "Time (min)",
                 format="%.0f"
             ),
-            "Tiempo (h)": st.column_config.NumberColumn(
-                "Tiempo (h)",
+            "Time (h)": st.column_config.NumberColumn(
+                "Time (h)",
                 format="%.2f"
             ),
-            "Porcentaje (%)": st.column_config.NumberColumn(
-                "Porcentaje (%)",
+            "Percentage (%)": st.column_config.NumberColumn(
+                "Percentage (%)",
                 format="%.1f%%"
             )
         }
     )
     
     # INSIGHTS AUTOMÁTICOS
-    st.markdown("### 🧠 Insights Automáticos")
+    st.markdown("### 🧠 Automatic Insights")
 
     # Calcular métricas generales
     total_tiempo = df_graph['Duration'].sum() / 60
@@ -200,34 +200,34 @@ def show_activity_dashboard(df: pd.DataFrame) -> None:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.info(f"⏱️ **Tiempo total**: {total_tiempo:.0f} min")
+        st.info(f"⏱️ **Total time**: {total_tiempo:.0f} min")
 
     with col2:
-        st.info(f"📊 **Subactividades**: {total_actividades}")
+        st.info(f"📊 **Subactivities**: {total_actividades}")
 
     with col3:
-        st.info(f"📅 **Días con actividad**: {dias_activos}")
+        st.info(f"📅 **Active days**: {dias_activos}")
 
     with col4:
-        st.info(f"⏱️ **Promedio diario**: {tiempo_promedio:.0f} min")
+        st.info(f"⏱️ **Daily average**: {tiempo_promedio:.0f} min")
 
     # Fila inferior: Insights específicos (mismo estilo)
     insights_col1, insights_col2 = st.columns(2)
 
     with insights_col1:
         top_actividad = df_pie.iloc[0]
-        st.info(f"🏆 **Actividad principal**: {top_actividad['Subactivity']} ({top_actividad['Duration (min)']:.0f} min)")
+        st.info(f"🏆 **Top subactivity**: {top_actividad['Subactivity']} ({top_actividad['Duration (min)']:.0f} min)")
 
     with insights_col2:
         hora_pico = df_graph.groupby('Hour')['Duration'].sum().idxmax()
-        st.info(f"🕐 **Hora más activa**: {hora_pico}:00")
+        st.info(f"🕐 **Most active hour**: {hora_pico}:00")
 
 def generate_activity_insights(df):
-    """Genera insights inteligentes sobre patrones de actividad"""
+    """Generates intelligent insights about activity patterns"""
     insights = []
     
     if df.empty:
-        return ["No hay datos suficientes para generar insights"]
+        return ["Not enough data to generate insights"]
     
     # Análisis temporal
     if 'Begin' in df.columns:
@@ -237,18 +237,18 @@ def generate_activity_insights(df):
         # Hora más productiva
         hour_activity = df.groupby('Hour')['Duration'].sum()
         peak_hour = hour_activity.idxmax()
-        insights.append(f"🕐 Tu hora más productiva es las {peak_hour}:00")
+        insights.append(f"🕐 Your most productive hour is {peak_hour}:00")
         
         # Día más activo
         day_activity = df.groupby('Weekday')['Duration'].sum()
         peak_day = day_activity.idxmax()
-        insights.append(f"📅 Tu día más activo es {peak_day}")
+        insights.append(f"📅 Your most active day is {peak_day}")
     
     # Análisis de concentración
     if 'Subactivity' in df.columns:
         subact_counts = df['Subactivity'].value_counts()
         if len(subact_counts) > 0:
             most_frequent = subact_counts.index[0]
-            insights.append(f"🎯 Tu actividad más frecuente: {most_frequent}")
+            insights.append(f"🎯 Your most frequent subactivity: {most_frequent}")
     
     return insights

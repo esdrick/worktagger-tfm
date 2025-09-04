@@ -4,7 +4,6 @@ import math
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 import clasificacion_core_act
 import core_act as activities_loader
@@ -18,13 +17,10 @@ from dashboard.recommendations import show_productivity_recommendations
 from dashboard.chatbot import show_productivity_chatbot
 from dashboard.charts import show_activity_dashboard
 from dashboard.classification import (
-    manual_classification_sidebar,
-    eisenhower_heuristic_sidebar,
-    heuristic_prediction,
-    automated_classification,
-    heuristic_classification,
-    cases_classification
+    display_improved_label_palette 
 )
+
+from tutorial.onboarding import integrate_tutorial_in_classification
 
 from config.constants import EISEN_OPTIONS
 
@@ -43,7 +39,10 @@ def initialize_session_state():
         "all_cases": set(),
         "dicc_core_color": {},
         "filas_seleccionadas": pd.DataFrame(),
-        "navbar_selection": "📋 Pantalla principal"
+        "navbar_selection": "📋 Main Screen",
+        "ONBOARDING_ACTIVE": False,
+        "ONBOARDING_STEP": 0,
+        "ONBOARDING_COMPLETED": False
     }
     
     for key, default_value in defaults.items():
@@ -280,36 +279,17 @@ def display_view(selected_view, selected_df, format_table):
             st.error("There was an error processing the request. Try again")
 
 def display_label_palette(selected_df):
-    if len(selected_df) == 0:
-        st.title("Label cases")
-        st.warning("No data to label")
-        st.title("Label activities")
-        st.warning("No data to label")
-    else:
-        try:
-            st.title("Label cases")
-            cases_classification()
-            
-            st.title("Label activities")
-            # Clasificación automática primero, luego heurística, luego manual
-            if "df_original" in st.session_state:
-                view_options = load_view_options()
-                automated_classification(view_options, mensaje_container)
-            else:
-                st.error("No data loaded for automated classification")
-            
-            heuristic_classification()
-            heuristic_prediction()
-            
-            if 'dicc_core' in globals() and 'dicc_subact' in globals():
-                manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_sub, apply_label_to_selection, change_color)
-            else:
-                st.error("⚠️ Activity data not loaded properly. Please refresh the page.")
-            
-            eisenhower_heuristic_sidebar()
-        except Exception as e:
-            logging.exception(f"There was an error while displaying the sidebar", exc_info=e)
-            st.error("There was an error processing the request. Try again")
+    """Wrapper que llama a la función mejorada"""
+    display_improved_label_palette(
+        selected_df, 
+        dicc_core, 
+        dicc_subact, 
+        dicc_core_color, 
+        all_sub, 
+        apply_label_to_selection, 
+        change_color,
+        mensaje_container
+    )
 
 def apply_label_to_selection(**kwargs):
     """Lógica de etiquetado: aplicar etiquetas a la selección actual"""
@@ -398,11 +378,18 @@ mensaje_container = st.empty()
 # Renderizar navbar solo si hay datos cargados
 if "df_original" in st.session_state:
     st.markdown("---")
-    selected_nav = render_menu_selector()
+    try:
+        selected_nav = render_menu_selector()
+    except Exception:
+        # Si el menú depende de df u otro estado, usar la última selección guardada
+        selected_nav = st.session_state.get("navbar_selection", "📋 Main Screen")
     st.markdown("---")
 else:
     # Obtener selección por defecto si no hay datos
-    selected_nav = st.session_state.get("navbar_selection", "📋 Pantalla principal")
+    selected_nav = st.session_state.get("navbar_selection", "📋 Main Screen")
+
+# Persistir siempre la selección en el estado
+st.session_state["navbar_selection"] = selected_nav
 
 # --- Data Initialization ---
 if "df_original" not in st.session_state:
@@ -497,17 +484,35 @@ if "df_original" not in st.session_state:
             current_filename = archivo_cargado.name
             if st.session_state.get("previous_file_name") != current_filename:
                 st.session_state["previous_file_name"] = current_filename
+
+                # 🔁 Al cambiar de archivo, vuelve a la pantalla principal y reinicia el tutorial
+                st.session_state["navbar_selection"] = "📋 Main Screen"
+                st.session_state["current_page"] = 1
+                st.session_state["ONBOARDING_ACTIVE"] = False
+                st.session_state["ONBOARDING_STEP"] = 0
+                st.session_state["ONBOARDING_COMPLETED"] = True  # evita que reaparezca automáticamente
+
                 st.rerun()
+
+        # Si se cargan datos de ejemplo, también simulamos un cambio de archivo y volvemos a HOME
+        if load_sample_data:
+            st.session_state["previous_file_name"] = "__SAMPLE__"
+            st.session_state["navbar_selection"] = "📋 Main Screen"
+            st.session_state["current_page"] = 1
+            st.session_state["ONBOARDING_ACTIVE"] = False
+            st.session_state["ONBOARDING_STEP"] = 0
+            st.session_state["ONBOARDING_COMPLETED"] = True
+            st.rerun()
 
         if "file_loaded_once" not in st.session_state:
             st.session_state["file_loaded_once"] = True
             st.rerun()
 
-# --- Navegación y contenido principal ---
+# --- Navigation and main content ---
 if "df_original" in st.session_state:
     view_options = load_view_options()
 
-    if selected_nav == "📋 Pantalla principal":
+    if selected_nav == "📋 Main Screen":
         view_type = st.radio(
             label="Select view",
             options=view_options.keys(),
@@ -523,30 +528,30 @@ if "df_original" in st.session_state:
         with st.sidebar:
             display_label_palette(selected_df)
 
-    elif selected_nav == "📊 Dashboard de Actividades":
-        st.markdown("### 🧩 Panel de Visualizaciones")
+    elif selected_nav == "📊 Activities Dashboard":
+        st.markdown("### 🧩 Visualizations Panel")
         if len(st.session_state.df_original) > 0:
             show_activity_dashboard(st.session_state.df_original)
 
-    elif selected_nav == "🧭 Matriz de Eisenhower – Ver detalle por subactividad":
+    elif selected_nav == "🧭 Eisenhower Matrix – View details by subactivity":
         df = st.session_state.df_original
         if 'Eisenhower' not in df.columns or df['Eisenhower'].notna().sum() == 0:
-            st.markdown("### 🧭 Matriz de Eisenhower")
-            st.info("📝 **Para ver la Matriz de Eisenhower y recomendaciones, primero clasifica tus actividades.**")
+            st.markdown("### 🧭 Eisenhower Matrix")
+            st.info("📝 **To view the Eisenhower Matrix and recommendations, first classify your activities.**")
             st.markdown("""
-            **¿Cómo empezar?**
-            1. Ve a **📋 Pantalla principal**
-            2. Selecciona algunas actividades (usa los checkboxes)
-            3. En la barra lateral, usa alguna herramienta de clasificación:
-            - 🤖 **Clasificación automática con GPT**
-            - 🧠 **Clasificación heurística**
-            - ✋ **Clasificación manual** (selecciona cuadrante)
-            4. Regresa aquí para ver tu análisis completo
+            **How to start?**
+            1. Go to **📋 Main Screen**
+            2. Select some activities (use the checkboxes)
+            3. In the sidebar, use a classification tool:
+            - 🤖 **Automatic classification with GPT**
+            - 🧠 **Heuristic classification**
+            - ✋ **Manual classification** (select quadrant)
+            4. Come back here to see your full analysis
             """)
         else:
-            # Solo mostrar si HAY datos clasificados
+            # Only show if there are classified data
             plot_eisenhower_matrix(st.session_state.df_original)
             show_productivity_recommendations()
 
-    elif selected_nav == "🤖 Asistente de productividad (beta)":
+    elif selected_nav == "🤖 Productivity Assistant (beta)":
         show_productivity_chatbot()

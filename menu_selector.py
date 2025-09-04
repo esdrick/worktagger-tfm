@@ -1,10 +1,9 @@
-
 import streamlit as st
 
 def render_menu_selector():
-    # Asegura que se marque como cargado correctamente después de asignar df_original
+    # Ensure it's marked as loaded correctly after assigning df_original
     if "navbar_selection" not in st.session_state:
-        st.session_state["navbar_selection"] = "📋 Pantalla principal"
+        st.session_state["navbar_selection"] = "📋 Main Screen"
     with st.container():
         # Estilos solo para navbar
         st.markdown("""
@@ -26,21 +25,21 @@ def render_menu_selector():
             </style>
         """, unsafe_allow_html=True)
 
-        # Opciones de navegación
+        # Navigation options
         nav_options = {
-            "📋 Pantalla principal": "main",
-            "📊 Dashboard de Actividades": "dashboard",
-            "🧭 Matriz de Eisenhower – Ver detalle por subactividad": "matrix",
-            "🤖 Asistente de productividad (beta)": "assistant"
+            "📋 Main Screen": "main",
+            "📊 Activities Dashboard": "dashboard",
+            "🧭 Eisenhower Matrix – View details by subactivity": "matrix",
+            "🤖 Productivity Assistant (beta)": "assistant"
         }
 
-        # Crear columnas para los botones
+        # Create columns for the buttons
         nav_cols = st.columns(len(nav_options))
         
-        # Obtener selección actual
-        current_selection = st.session_state.get("navbar_selection", "📋 Pantalla principal")
+        # Get current selection
+        current_selection = st.session_state.get("navbar_selection", "📋 Main Screen")
 
-        # Mostrar botones con detección de estado activo
+        # Show buttons with active state detection
         for idx, (label, value) in enumerate(nav_options.items()):
             with nav_cols[idx]:
                 is_active = (label == current_selection)
@@ -53,4 +52,4 @@ def render_menu_selector():
                     st.session_state["navbar_selection"] = label
                     st.rerun() 
 
-    return st.session_state.get("navbar_selection", "📋 Pantalla principal")
+    return st.session_state.get("navbar_selection", "📋 Main Screen")

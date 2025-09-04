@@ -3,6 +3,7 @@ import datetime as dt
 import pandas as pd
 import analysis as wt
 from abc import ABC, abstractmethod
+from config.constants import EISEN_OPTIONS  # AGREGAR ESTE IMPORT
 
 class View(ABC):
     @property
@@ -59,12 +60,7 @@ class TimeView(View):
             "Eisenhower": st.column_config.SelectboxColumn(
                 label="Eisen.",
                 width="small",
-                options=[
-                    "I: Urgente & Importante",
-                    "II: No urgente pero Importante",
-                    "III: Urgente pero No importante",
-                    "IV: No urgente & No importante",
-                ],
+                options=EISEN_OPTIONS,  # USAR CONSTANTES
             ),
         }
 
@@ -151,12 +147,7 @@ class ActiveWindowView(View):
             "Eisenhower": st.column_config.SelectboxColumn(
                 label="Eisen.",
                 width="small",
-                options=[
-                    "I: Urgente & Importante",
-                    "II: No urgente pero Importante",
-                    "III: Urgente pero No importante",
-                    "IV: No urgente & No importante",
-                ],
+                options=EISEN_OPTIONS,  # USAR CONSTANTES
             ),
         }
 
@@ -230,12 +221,7 @@ class ActivityView(View):
             "Eisenhower": st.column_config.SelectboxColumn(
                 label="Eisen.",
                 width="small",
-                options=[
-                    "I: Urgente & Importante",
-                    "II: No urgente pero Importante",
-                    "III: Urgente pero No importante",
-                    "IV: No urgente & No importante",
-                ],
+                options=EISEN_OPTIONS,  # USAR CONSTANTES
             ),
         }
 
@@ -317,12 +303,7 @@ class WorkSlotView(View):
             "Eisenhower": st.column_config.SelectboxColumn(
                 label="Eisen.",
                 width="small",
-                options=[
-                    "I: Urgente & Importante",
-                    "II: No urgente pero Importante",
-                    "III: Urgente pero No importante",
-                    "IV: No urgente & No importante",
-                ],
+                options=EISEN_OPTIONS,  # USAR CONSTANTES
             ),
         }
 
@@ -369,5 +350,3 @@ class WorkSlotView(View):
         df_original.loc[df_original['ID'].isin(filas_seleccionadas), key] = value
         if key == "Eisenhower":
             df_original.loc[df_original[key].notnull(), "Change"] = False
-
-    

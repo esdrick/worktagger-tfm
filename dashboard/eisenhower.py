@@ -9,57 +9,57 @@ def truncate(text, max_len=40):
 
 def plot_eisenhower_matrix_plotly(df, max_items=10):
     """
-    Matriz de Eisenhower minimalista y moderna usando Plotly
+    Minimalist and modern Eisenhower Matrix using Plotly
     """
     df_filtered = df[df["Eisenhower"].notna()]
     if df_filtered.empty:
-        st.info("No hay subactividades etiquetadas con la matriz de Eisenhower.")
+        st.info("No subactivities labeled with the Eisenhower matrix.")
         return
 
-    # Procesar datos
+    # Process data
     summary = (
         df_filtered
         .groupby(["Eisenhower", "Subactivity"])["Duration"]
         .sum()
-        .div(60)  # segundos → minutos
+        .div(60)  # seconds → minutes
         .reset_index()
         .sort_values("Duration", ascending=False)
     )
 
-    # Configuración de cuadrantes
+    # Quadrant configuration
     quad_config = {
-        "I: Urgente & Importante": {
+        "I: Urgent & Important": {
             "x": 0, "y": 1, 
             "color": "#EF4444", 
             "icon": "🔥", 
-            "title": "Urgente & Importante"
+            "title": "Urgent & Important"
         },
-        "II: No urgente pero Importante": {
+        "II: Not urgent but Important": {
             "x": 1, "y": 1, 
             "color": "#F59E0B", 
             "icon": "⭐", 
-            "title": "Importante"
+            "title": "Not urgent but Important"
         },
-        "III: Urgente pero No importante": {
+        "III: Urgent but Not important": {
             "x": 0, "y": 0, 
             "color": "#3B82F6", 
             "icon": "⚡", 
-            "title": "Urgente"
+            "title": "Urgent but Not important"
         },
-        "IV: No urgente & No importante": {
+       "IV: Not urgent & Not important": {
             "x": 1, "y": 0, 
             "color": "#10B981", 
             "icon": "🌱", 
-            "title": "Opcional"
+            "title": "Not urgent & Not important"
         }
     }
 
-    # Crear figura
+    # Create figure
     fig = go.Figure()
 
-    # Agregar cuadrantes como rectángulos
+    # Add quadrants as rectangles
     for quad, config in quad_config.items():
-        # Rectángulo del cuadrante
+        # Quadrant rectangle
         fig.add_shape(
             type="rect",
             x0=config["x"], y0=config["y"], 
@@ -70,7 +70,7 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
             layer="below"
         )
 
-        # Título del cuadrante
+        # Quadrant title
         fig.add_annotation(
             x=config["x"] + 0.475,
             y=config["y"] + 0.88,
@@ -83,11 +83,11 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
             borderpad=8
         )
 
-        # Obtener actividades del cuadrante
+        # Get quadrant activities
         quad_items = summary[summary["Eisenhower"] == quad].head(max_items)
         
         if quad_items.empty:
-            activities_text = "Sin actividades"
+            activities_text = "No activities"
             total_time = 0
         else:
             activities_list = []
@@ -99,7 +99,7 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
             activities_text = "<br>".join(activities_list)
             total_time = summary[summary["Eisenhower"] == quad]["Duration"].sum()
 
-        # Lista de actividades
+        # Activities list
         fig.add_annotation(
             x=config["x"] + 0.05,
             y=config["y"] + 0.70,
@@ -111,7 +111,7 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
             align="left"
         )
 
-        # Tiempo total
+        # Total time
         total_display = f"{total_time/60:.1f}h" if total_time >= 60 else f"{total_time:.0f}min"
         fig.add_annotation(
             x=config["x"] + 0.475,
@@ -123,14 +123,14 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
             borderpad=6
         )
 
-    # Líneas divisorias minimalistas
+    # Minimalist dividing lines
     fig.add_hline(y=1, line_dash="dot", line_color="#D1D5DB", line_width=1)
     fig.add_vline(x=1, line_dash="dot", line_color="#D1D5DB", line_width=1)
 
-    # Etiquetas de ejes
+    # Axis labels
     fig.add_annotation(
         x=1, y=-0.1,
-        text="<b>URGENCIA →</b>",
+        text="<b>URGENCY →</b>",
         showarrow=False,
         font=dict(size=12, color="#6B7280"),
         yanchor="middle"
@@ -138,17 +138,17 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
     
     fig.add_annotation(
         x=-0.1, y=1,
-        text="<b>IMPORTANCIA ↑</b>",
+        text="<b>IMPORTANCE ↑</b>",
         showarrow=False,
         font=dict(size=12, color="#6B7280"),
         textangle=90,
         yanchor="middle"
     )
 
-    # Configuración del layout
+    # Layout configuration
     fig.update_layout(
         title=dict(
-            text="<b>Matriz de Eisenhower</b>",
+            text="<b>Eisenhower Matrix</b>",
             x=0.45,
             y=0.96,
             font=dict(size=20, color="#1F2937")
@@ -172,7 +172,7 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
         margin=dict(l=50, r=50, t=80, b=50)
     )
 
-    # Mostrar en Streamlit
+    # Display in Streamlit
     st.plotly_chart(
         fig,
         use_container_width=True,
@@ -182,14 +182,14 @@ def plot_eisenhower_matrix_plotly(df, max_items=10):
         }
     )
 
-# Versión aún más minimalista con subplots
+# Even more minimalist version with subplots
 def plot_eisenhower_matrix_minimal(df, max_items=8):
     """
-    Versión súper minimalista con cards limpias
+    Super minimalist version with clean cards
     """
     df_filtered = df[df["Eisenhower"].notna()]
     if df_filtered.empty:
-        st.info("No hay subactividades etiquetadas con la matriz de Eisenhower.")
+        st.info("No subactivities labeled with the Eisenhower matrix.")
         return
 
     summary = (
@@ -201,19 +201,19 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
         .sort_values("Duration", ascending=False)
     )
 
-    # Configuración minimalista
+    # Minimalist configuration
     quads = [
-        {"name": "I: Urgente & Importante", "color": "#EF4444", "icon": "🔥"},
-        {"name": "II: No urgente pero Importante", "color": "#F59E0B", "icon": "⭐"},
-        {"name": "III: Urgente pero No importante", "color": "#3B82F6", "icon": "⚡"},
-        {"name": "IV: No urgente & No importante", "color": "#10B981", "icon": "🌱"}
+        {"name": "I: Urgent & Important", "color": "#EF4444", "icon": "🔥"},
+        {"name": "II: Not urgent but Important", "color": "#F59E0B", "icon": "⭐"},
+        {"name": "III: Urgent but Not important", "color": "#3B82F6", "icon": "⚡"},
+        {"name": "IV: Not urgent & Not important", "color": "#10B981", "icon": "🌱"}
     ]
 
-    # Crear grid 2x2
+    # Create 2x2 grid
     col1, col2 = st.columns(2)
     
     with col1:
-        # Cuadrante I
+        # Quadrant I
         quad = quads[0]
         items = summary[summary["Eisenhower"] == quad["name"]].head(max_items)
         total = summary[summary["Eisenhower"] == quad["name"]]["Duration"].sum()
@@ -229,13 +229,13 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
                 min-height: 300px;
             ">
                 <h4 style="color: {quad['color']}; margin-bottom: 15px;">
-                    {quad['icon']} Urgente & Importante
+                    {quad['icon']} Urgent & Important
                 </h4>
                 <div style="color: #374151; font-size: 14px; line-height: 1.6;">
             """, unsafe_allow_html=True)
             
             if items.empty:
-                st.markdown("*Sin actividades registradas*")
+                st.markdown("*No activities recorded*")
             else:
                 for _, row in items.iterrows():
                     st.markdown(f"• {truncate(str(row.Subactivity), 35)} `{row.Duration:.0f}min`")
@@ -257,7 +257,7 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
             </div>
             """, unsafe_allow_html=True)
 
-        # Cuadrante III
+        # Quadrant III
         quad = quads[2]
         items = summary[summary["Eisenhower"] == quad["name"]].head(max_items)
         total = summary[summary["Eisenhower"] == quad["name"]]["Duration"].sum()
@@ -272,13 +272,13 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
                 min-height: 300px;
             ">
                 <h4 style="color: {quad['color']}; margin-bottom: 15px;">
-                    {quad['icon']} Urgente pero No importante
+                    {quad['icon']} Urgent but Not important
                 </h4>
                 <div style="color: #374151; font-size: 14px; line-height: 1.6;">
             """, unsafe_allow_html=True)
             
             if items.empty:
-                st.markdown("*Sin actividades registradas*")
+                st.markdown("*No activities recorded*")
             else:
                 for _, row in items.iterrows():
                     st.markdown(f"• {truncate(str(row.Subactivity), 35)} `{row.Duration:.0f}min`")
@@ -301,7 +301,7 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
             """, unsafe_allow_html=True)
 
     with col2:
-        # Cuadrante II
+        # Quadrant II
         quad = quads[1]
         items = summary[summary["Eisenhower"] == quad["name"]].head(max_items)
         total = summary[summary["Eisenhower"] == quad["name"]]["Duration"].sum()
@@ -317,13 +317,13 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
                 min-height: 300px;
             ">
                 <h4 style="color: {quad['color']}; margin-bottom: 15px;">
-                    {quad['icon']} No urgente pero Importante
+                    {quad['icon']} Not urgent but Important
                 </h4>
                 <div style="color: #374151; font-size: 14px; line-height: 1.6;">
             """, unsafe_allow_html=True)
             
             if items.empty:
-                st.markdown("*Sin actividades registradas*")
+                st.markdown("*No activities recorded*")
             else:
                 for _, row in items.iterrows():
                     st.markdown(f"• {truncate(str(row.Subactivity), 35)} `{row.Duration:.0f}min`")
@@ -345,7 +345,7 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
             </div>
             """, unsafe_allow_html=True)
 
-        # Cuadrante IV
+        # Quadrant IV
         quad = quads[3]
         items = summary[summary["Eisenhower"] == quad["name"]].head(max_items)
         total = summary[summary["Eisenhower"] == quad["name"]]["Duration"].sum()
@@ -360,13 +360,13 @@ def plot_eisenhower_matrix_minimal(df, max_items=8):
                 min-height: 300px;
             ">
                 <h4 style="color: {quad['color']}; margin-bottom: 15px;">
-                    {quad['icon']} No urgente & No importante
+                    {quad['icon']} Not urgent & Not important
                 </h4>
                 <div style="color: #374151; font-size: 14px; line-height: 1.6;">
             """, unsafe_allow_html=True)
             
             if items.empty:
-                st.markdown("*Sin actividades registradas*")
+                st.markdown("*No activities recorded*")
             else:
                 for _, row in items.iterrows():
                     st.markdown(f"• {truncate(str(row.Subactivity), 35)} `{row.Duration:.0f}min`")
