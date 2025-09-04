@@ -5,13 +5,13 @@ import math
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import streamlit as s
 
 import clasificacion_core_act
 import core_act as activities_loader
 import analysis as wt
 import views
 
+from menu_selector import render_menu_selector
 from utils.styles import change_color
 from dashboard.eisenhower import plot_eisenhower_matrix_plotly as plot_eisenhower_matrix
 from dashboard.recommendations import show_productivity_recommendations
@@ -28,21 +28,57 @@ from dashboard.classification import (
 
 from config.constants import EISEN_OPTIONS
 
+st.set_page_config(layout="wide")
 
 SAMPLE_DATA_URL = "https://raw.githubusercontent.com/project-pivot/labelled-awt-data/main/data/awt_data_1_pseudonymized.csv"
+
+def initialize_session_state():
+    """Inicializa el estado de sesión con valores por defecto seguros"""
+    defaults = {
+        "current_page": 1,
+        "last_acts": [],
+        "next_day": None,
+        "a_datetime": None,
+        "undo_df": None,
+        "all_cases": set(),
+        "dicc_core_color": {},
+        "filas_seleccionadas": pd.DataFrame(),
+        "navbar_selection": "📋 Pantalla principal"
+    }
+    
+    for key, default_value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+
+initialize_session_state()
 
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
-    level=logging.INFO, # Set the logging level
-    handlers=[logging.StreamHandler()] # Ensures output to Streamlit's terminal
+    level=logging.INFO,
+    handlers=[logging.StreamHandler()]
 )
 
 @st.cache_data
-def load_activities():
-    return activities_loader.load_activities()
+def safe_load_activities():
+    """Carga segura de datos de actividades"""
+    try:
+        return activities_loader.load_activities()
+    except Exception as e:
+        st.error(f"Error loading activities: {e}")
+        return {}, {}, {}, {}
 
-# @st.cache_resource
+# Inicialización segura
+dicc_core, dicc_subact, dicc_map_subact, dicc_core_color = safe_load_activities()
+
+# Verificar que se cargaron correctamente
+if not dicc_core_color:
+    st.warning("⚠️ Activities data could not be loaded. Using defaults.")
+    dicc_core_color = {}
+
+st.session_state["dicc_core_color"] = dicc_core_color
+all_sub = [f"{s} - {c}" for c in dicc_subact for s in dicc_subact[c]] if dicc_subact else []
+
 def load_view_options():
     return {
         "Time view": views.TimeView(),
@@ -51,13 +87,10 @@ def load_view_options():
         "Work slot view": views.WorkSlotView()
     }
 
-
 def split_df(input_df, batch_size, current_page):
     start_idx = (current_page - 1) * batch_size
     end_idx = start_idx + batch_size
-
     return input_df.iloc[start_idx:end_idx]
-
 
 def paginate_df(dataset):
     def update_input_current_page_before():
@@ -85,15 +118,12 @@ def paginate_df(dataset):
         st.markdown(f"Page **{st.session_state.current_page}** of **{total_pages}** ")
 
     page = split_df(dataset, batch_size, st.session_state.current_page)
-
     return page, batch_size, total_pages
 
 def apply_styles(page, format_table):
-
     toggle_block_colours = format_table['toggle_block_colours']
     toggle_begin_end_colours = format_table['toggle_begin_end_colours']
     max_time_between_activities = format_table['max_time_between_activities']
-
 
     def resaltar_principio_fin_bloques(fila):
         valor_actual_b = fila['Begin']
@@ -105,18 +135,14 @@ def apply_styles(page, format_table):
             fila_ant['End'] = pd.to_datetime(fila_ant['End'], format='%d/%m/%Y %H:%M')
 
         dif_tiempo_ant = (valor_actual_b-fila_ant['End']).total_seconds()/60 if fila_ant is not None else 0
-
         dif_tiempo_sig = (fila_sig['Begin']-valor_actual_e).total_seconds()/60 if fila_sig is not None else 0
 
         ls_estilos = asignar_color(fila)
         if fila_sig is None or dif_tiempo_sig>max_time_between_activities :
-
             ls_estilos[6] = 'background-color:#808080'
         if fila_ant is None or dif_tiempo_ant>max_time_between_activities or fila.name==0 :
-
             ls_estilos[5] = 'background-color:#808080'
         return ls_estilos
-
 
     if toggle_block_colours and not toggle_begin_end_colours:
         result = page.style.apply(asignar_color,axis=1)
@@ -145,20 +171,25 @@ def download_csv(df):
     )
 
 def asignar_color(s):
+    """Asigna color de fondo basado en la actividad de forma segura"""
     col = '#FFFFFF'
-    if isinstance(s.Activity, list):
-        if len(s.Activity) == 1:
-            activity = s.Activity[0]
+    
+    # Obtener diccionario de colores de forma segura
+    dicc_core_color = st.session_state.get("dicc_core_color", {})
+    
+    # Extraer actividad de forma segura
+    activity = None
+    if hasattr(s, 'Activity') and s.Activity is not None:
+        if isinstance(s.Activity, list):
+            activity = s.Activity[0] if len(s.Activity) == 1 else None
         else:
-            activity = None
-    else:
-        activity = s.Activity
-
-    if activity in dicc_core_color:
+            activity = s.Activity
+    
+    # Asignar color si existe
+    if activity and activity in dicc_core_color:
         col = dicc_core_color[activity]
 
-    return [f'background-color:{col}']*len(s)
-
+    return [f'background-color:{col}'] * len(s)
 
 def asignar_color_sin_estilos(s):
     return ['background-color:#FFFFFF'] * len(s)
@@ -169,9 +200,6 @@ def display_undo_button():
         st.session_state.undo_df = None
 
     st.button("↩️ Undo", disabled=(st.session_state.undo_df is None), on_click = undo_last_action, use_container_width=True)
-
-def display_select_all_button():
-    return st.button("✅ Select all in this page", use_container_width=True)
 
 @st.fragment
 def display_events_table(df, format_table, batch_size, column_config, column_order=None):
@@ -189,9 +217,7 @@ def display_events_table(df, format_table, batch_size, column_config, column_ord
         if select_invert:
             df.loc[:,"Change"] = ~(df["ID"].isin(st.session_state.filas_seleccionadas["ID"]))
 
-
     styled_df = apply_styles(df, format_table)
-
     disabled = df.columns.difference(['Change'])
 
     # Shows table
@@ -205,7 +231,6 @@ def display_events_table(df, format_table, batch_size, column_config, column_ord
         use_container_width = True,
         height= int(35.2*(batch_size+1))
     )
-
 
     # Filter rows that have been selected
     if 'Change' in edited_df.columns:
@@ -247,9 +272,7 @@ def display_view(selected_view, selected_df, format_table):
                 download_csv(st.session_state.df_original)
 
             page, batch_size, total_pages = paginate_df(selected_df)
-
             column_config, column_order = selected_view.view_config(max_dur=selected_df["Duration"].max())
-
             selected_rows = display_events_table(page, format_table, batch_size, column_config, column_order)
             display_pagination_bottom(total_pages)
         except Exception as e:
@@ -266,21 +289,30 @@ def display_label_palette(selected_df):
         try:
             st.title("Label cases")
             cases_classification()
-            # Classification logic for cases is now handled in dashboard/classification.py
+            
             st.title("Label activities")
             # Clasificación automática primero, luego heurística, luego manual
-            automated_classification(view_options, mensaje_container)
+            if "df_original" in st.session_state:
+                view_options = load_view_options()
+                automated_classification(view_options, mensaje_container)
+            else:
+                st.error("No data loaded for automated classification")
+            
             heuristic_classification()
             heuristic_prediction()
-            manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_sub, apply_label_to_selection, change_color)
+            
+            if 'dicc_core' in globals() and 'dicc_subact' in globals():
+                manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_sub, apply_label_to_selection, change_color)
+            else:
+                st.error("⚠️ Activity data not loaded properly. Please refresh the page.")
+            
             eisenhower_heuristic_sidebar()
         except Exception as e:
             logging.exception(f"There was an error while displaying the sidebar", exc_info=e)
             st.error("There was an error processing the request. Try again")
 
-
-# --- Lógica de etiquetado: aplicar etiquetas a la selección actual ---
 def apply_label_to_selection(**kwargs):
+    """Lógica de etiquetado: aplicar etiquetas a la selección actual"""
     if "df_original" not in st.session_state or "filas_seleccionadas" not in st.session_state:
         st.warning("No hay filas seleccionadas o no se ha cargado el dataset.")
         return
@@ -312,9 +344,6 @@ def display_table_formatter(selected_view):
         'max_time_between_activities': max_time_between_activities
     }
 
-
-st.set_page_config(layout="wide")
-
 # --- Custom Styles ---
 st.markdown("""
 <style>
@@ -329,11 +358,7 @@ div[data-testid="stExpander"] {
 </style>
 """, unsafe_allow_html=True)
 
-
-dicc_core, dicc_subact, dicc_map_subact, dicc_core_color = load_activities()
-st.session_state["dicc_core_color"] = dicc_core_color
-all_sub = [f"{s} - {c}" for c in dicc_subact for s in dicc_subact[c]]
-
+# --- UI Principal ---
 upload_expanded = "df_original" not in st.session_state
 with st.expander("📁 Upload your data", expanded=upload_expanded):
     st.markdown("""
@@ -366,110 +391,85 @@ with st.expander("📁 Upload your data", expanded=upload_expanded):
     """)
 
     load_sample_data = st.button("🔄 Load sample data", type="primary", on_click=changed_file)
-    
-# --- Separador visual ---
-if "df_original" in st.session_state:
-    # Asegura que se marque como cargado correctamente después de asignar df_original
-    if "navbar_selection" not in st.session_state:
-        st.session_state["navbar_selection"] = "📋 Pantalla principal"
-
-    st.markdown("---")
-    with st.container():
-        # Estilos solo para navbar
-        st.markdown("""
-            <style>
-            div[data-testid="column"] button {
-                height: 100px !important;
-                white-space: normal !important;
-                font-size: 16px !important;
-                font-weight: bold !important;
-                text-align: center !important;
-                padding: 10px !important;
-            }
-            </style>
-        """, unsafe_allow_html=True)
-
-        # Opciones de navegación
-        nav_options = {
-            "📋 Pantalla principal": "main",
-            "📊 Dashboard de Actividades": "dashboard",
-            "🧭 Matriz de Eisenhower – Ver detalle por subactividad": "matrix",
-            "🤖 Asistente de productividad (beta)": "assistant"
-        }
-
-        # Crear columnas para los botones
-        nav_cols = st.columns(len(nav_options))
-
-        # Mostrar botones
-        for idx, (label, value) in enumerate(nav_options.items()):
-            with nav_cols[idx]:
-                if st.button(label, key=label, use_container_width=True):
-                    st.session_state["navbar_selection"] = label
-
-    st.markdown("---")
-
-# Obtener selección actual
-selected_nav = st.session_state.get("navbar_selection", "📋 Pantalla principal")
 
 # Contenedor de mensajes para mostrar estados de carga
 mensaje_container = st.empty()
 
-#
-# --- Data Initialization ---
-#
-if "df_original" not in st.session_state:
-    st.session_state["current_page"] = 1
-    st.session_state["last_acts"] = []
-    st.session_state["next_day"] = None
-    st.session_state["a_datetime"] = None
-    st.session_state["undo_df"] = None
-    st.session_state["all_cases"] = set()
+# Renderizar navbar solo si hay datos cargados
+if "df_original" in st.session_state:
+    st.markdown("---")
+    selected_nav = render_menu_selector()
+    st.markdown("---")
+else:
+    # Obtener selección por defecto si no hay datos
+    selected_nav = st.session_state.get("navbar_selection", "📋 Pantalla principal")
 
+# --- Data Initialization ---
+if "df_original" not in st.session_state:
     if archivo_cargado is not None or load_sample_data:
         mensaje_container.write("Loading...")
+        
         if load_sample_data:
             data_expanded = clasificacion_core_act.simple_load_file(url_link=SAMPLE_DATA_URL, dayfirst=True)
         elif archivo_cargado is not None and archivo_cargado.name.endswith(".db"):
             import sqlite3
             import tempfile
             import os
-            # Save the uploaded .db file to a temporary file
-            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                tmp_file.write(archivo_cargado.read())
-                tmp_file_path = tmp_file.name
-            # Connect to the SQLite database
-            conn = sqlite3.connect(tmp_file_path)
-            # Select the required columns from the TrackItems table
-            query = """
-            SELECT id, app, taskName, title, url, color, beginDate, endDate
-            FROM TrackItems
-            """
-            df_sqlite = pd.read_sql_query(query, conn)
-            conn.close()
-            os.unlink(tmp_file_path)
-            # Convert beginDate and endDate from ms since epoch to datetime
-            df_sqlite['Begin'] = pd.to_datetime(df_sqlite['beginDate'], unit='ms')
-            df_sqlite['End'] = pd.to_datetime(df_sqlite['endDate'], unit='ms')
-            df_sqlite['Duration'] = (df_sqlite['End'] - df_sqlite['Begin']).dt.total_seconds()
-            # Compose the expected columns
-            df_sqlite['Merged_titles'] = df_sqlite['title']
-            df_sqlite['App'] = df_sqlite['app']
-            df_sqlite['Activity'] = None
-            df_sqlite['Subactivity'] = None
-            df_sqlite['Case'] = None
-            df_sqlite['Eisenhower'] = None
-            df_sqlite['Change'] = False
-            df_sqlite['Begin Time'] = df_sqlite['Begin'].dt.strftime('%H:%M:%S')
-            df_sqlite['Ending Time'] = df_sqlite['End'].dt.strftime('%H:%M:%S')
-            df_sqlite['ID'] = range(1, len(df_sqlite) + 1)
-            # Arrange columns as expected
-            df_sqlite = df_sqlite[[
-                'Change', 'ID', 'Merged_titles', 'Begin', 'End', 'Begin Time', 'Ending Time',
-                'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App'
-            ]]
-            data_expanded = df_sqlite
+            
+            try:
+                # Save the uploaded .db file to a temporary file
+                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                    tmp_file.write(archivo_cargado.read())
+                    tmp_file_path = tmp_file.name
+                
+                # Connect to the SQLite database
+                conn = sqlite3.connect(tmp_file_path)
+                
+                # Select the required columns from the TrackItems table
+                query = """
+                SELECT id, app, taskName, title, url, color, beginDate, endDate
+                FROM TrackItems
+                WHERE beginDate IS NOT NULL AND endDate IS NOT NULL
+                """
+                df_sqlite = pd.read_sql_query(query, conn)
+                conn.close()
+                os.unlink(tmp_file_path)
+                
+                # Convert beginDate and endDate from ms since epoch to datetime
+                df_sqlite['Begin'] = pd.to_datetime(df_sqlite['beginDate'], unit='ms')
+                df_sqlite['End'] = pd.to_datetime(df_sqlite['endDate'], unit='ms')
+                df_sqlite['Duration'] = (df_sqlite['End'] - df_sqlite['Begin']).dt.total_seconds()
+                
+                # Filter out invalid durations
+                df_sqlite = df_sqlite[df_sqlite['Duration'] > 0]
+                
+                # Compose the expected columns
+                df_sqlite['Merged_titles'] = df_sqlite['title'].fillna('')
+                df_sqlite['App'] = df_sqlite['app'].fillna('Unknown')
+                df_sqlite['Activity'] = None
+                df_sqlite['Subactivity'] = None
+                df_sqlite['Case'] = None
+                df_sqlite['Eisenhower'] = None
+                df_sqlite['Change'] = False
+                df_sqlite['Begin Time'] = df_sqlite['Begin'].dt.strftime('%H:%M:%S')
+                df_sqlite['Ending Time'] = df_sqlite['End'].dt.strftime('%H:%M:%S')
+                df_sqlite['ID'] = range(1, len(df_sqlite) + 1)
+                
+                # Arrange columns as expected
+                df_sqlite = df_sqlite[[
+                    'Change', 'ID', 'Merged_titles', 'Begin', 'End', 'Begin Time', 'Ending Time',
+                    'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App'
+                ]]
+                data_expanded = df_sqlite
+                
+            except Exception as e:
+                st.error(f"Error processing SQLite file: {str(e)}")
+                st.stop()
+                
         elif archivo_cargado is not None:
             data_expanded = clasificacion_core_act.simple_load_file(loaded_file=archivo_cargado)
+            
+        # Procesar datos cargados
         if filter_by_time > 0:
             data_expanded = data_expanded[data_expanded['Duration'] >= filter_by_time]
 
@@ -477,15 +477,16 @@ if "df_original" not in st.session_state:
 
         data_expanded['ID'] = range(1,len(data_expanded)+1)
         data_expanded = data_expanded.reset_index(drop=True)
+        
         # Only parse if not already datetime (i.e., only for CSVs)
         if not (archivo_cargado is not None and archivo_cargado.name.endswith(".db")):
             data_expanded['Begin'] = pd.to_datetime(data_expanded['Begin'], format='%d/%m/%Y %H:%M:%S')
             data_expanded['End'] = pd.to_datetime(data_expanded['End'], format='%d/%m/%Y %H:%M:%S')
-            data_expanded['Begin Time'] =data_expanded['Begin'].dt.strftime('%H:%M:%S')
-            data_expanded['Ending Time']= data_expanded['End'].dt.strftime('%H:%M:%S')
+            data_expanded['Begin Time'] = data_expanded['Begin'].dt.strftime('%H:%M:%S')
+            data_expanded['Ending Time'] = data_expanded['End'].dt.strftime('%H:%M:%S')
             data_expanded['Change'] = False
-            # Initialize Eisenhower quadrant label (manual classification)
             data_expanded['Eisenhower'] = None
+            
         expected_columns = ['Change', 'ID', 'Merged_titles', 'Begin', 'End', 'Begin Time', 'Ending Time', 'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App']
         available_columns = [col for col in expected_columns if col in data_expanded.columns]
         st.session_state.df_original = data_expanded[available_columns]
@@ -502,6 +503,7 @@ if "df_original" not in st.session_state:
             st.session_state["file_loaded_once"] = True
             st.rerun()
 
+# --- Navegación y contenido principal ---
 if "df_original" in st.session_state:
     view_options = load_view_options()
 
@@ -520,7 +522,6 @@ if "df_original" in st.session_state:
         display_view(selected_view, selected_df, format_table)
         with st.sidebar:
             display_label_palette(selected_df)
-            expanded_label_section = selected_nav == "📋 Pantalla principal"
 
     elif selected_nav == "📊 Dashboard de Actividades":
         st.markdown("### 🧩 Panel de Visualizaciones")
@@ -528,8 +529,24 @@ if "df_original" in st.session_state:
             show_activity_dashboard(st.session_state.df_original)
 
     elif selected_nav == "🧭 Matriz de Eisenhower – Ver detalle por subactividad":
-        plot_eisenhower_matrix(st.session_state.df_original)
-        show_productivity_recommendations()
+        df = st.session_state.df_original
+        if 'Eisenhower' not in df.columns or df['Eisenhower'].notna().sum() == 0:
+            st.markdown("### 🧭 Matriz de Eisenhower")
+            st.info("📝 **Para ver la Matriz de Eisenhower y recomendaciones, primero clasifica tus actividades.**")
+            st.markdown("""
+            **¿Cómo empezar?**
+            1. Ve a **📋 Pantalla principal**
+            2. Selecciona algunas actividades (usa los checkboxes)
+            3. En la barra lateral, usa alguna herramienta de clasificación:
+            - 🤖 **Clasificación automática con GPT**
+            - 🧠 **Clasificación heurística**
+            - ✋ **Clasificación manual** (selecciona cuadrante)
+            4. Regresa aquí para ver tu análisis completo
+            """)
+        else:
+            # Solo mostrar si HAY datos clasificados
+            plot_eisenhower_matrix(st.session_state.df_original)
+            show_productivity_recommendations()
 
     elif selected_nav == "🤖 Asistente de productividad (beta)":
         show_productivity_chatbot()

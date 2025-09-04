@@ -103,7 +103,7 @@ def manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_s
             logging.exception("There was an error saving Eisenhower label", exc_info=e)
             st.error("Error saving")
 
-    st.markdown("## Eisenhower Quadrant")
+    st.markdown("### Eisenhower Quadrant")
     eisen_options = EISEN_OPTIONS
     st.selectbox(
         "Eisenhower quadrant",
