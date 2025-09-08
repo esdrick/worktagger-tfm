@@ -9,6 +9,8 @@ import clasificacion_core_act
 import core_act as activities_loader
 import analysis as wt
 import views
+import utils.export_utils
+from datetime import datetime
 
 from menu_selector import render_menu_selector
 from utils.styles import change_color
@@ -267,17 +269,39 @@ def display_view(selected_view, selected_df, format_table):
             button_column = st.columns(3)
             with button_column[0]:
                 display_undo_button()
+            
             with button_column[2]:
-                download_csv(st.session_state.df_original)
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    download_csv(st.session_state.df_original)
+                
+                with col2:
+                    if st.button("📄 PDF Report", use_container_width=True):
+                        try:
+                            with st.spinner("Generating PDF..."):
+                                pdf_data = utils.export_utils.generate_pdf_report()
+                                st.download_button(
+                                    label="📄 Download PDF",
+                                    data=pdf_data,
+                                    file_name=f'report_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf',
+                                    mime='application/pdf',
+                                    use_container_width=True,
+                                    key="pdf_download"
+                                )
+                                st.success("PDF generated successfully!")
+                        except Exception as e:
+                            st.error(f"Error generating PDF: {e}")
 
             page, batch_size, total_pages = paginate_df(selected_df)
             column_config, column_order = selected_view.view_config(max_dur=selected_df["Duration"].max())
             selected_rows = display_events_table(page, format_table, batch_size, column_config, column_order)
             display_pagination_bottom(total_pages)
+            
         except Exception as e:
             logging.exception(f"There was an error while displaying the table", exc_info=e)
             st.error("There was an error processing the request. Try again")
-
+    
 def display_label_palette(selected_df):
     """Wrapper que llama a la función mejorada"""
     display_improved_label_palette(
@@ -555,3 +579,4 @@ if "df_original" in st.session_state:
 
     elif selected_nav == "🤖 Productivity Assistant (beta)":
         show_productivity_chatbot()
+        
