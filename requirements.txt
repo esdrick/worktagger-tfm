@@ -7,3 +7,4 @@ openpyxl
 plotly
 seaborn
 streamlit-extras
+reportlab>=3.6.0
