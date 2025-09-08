@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
 import requests
-import time
-from datetime import datetime, timedelta
-import json
+from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
+import utils.export_utils
 
 def show_productivity_chatbot():
     st.markdown("### 🤖 Intelligent Productivity Assistant")
@@ -122,9 +121,9 @@ def show_productivity_chatbot():
         "🔥 Activate focus mode"
     ]
 
-    # Quick questions and reset button
-    col_questions, col_reset = st.columns([4, 1])
-    
+    # Quick questions and action buttons
+    col_questions, col_actions = st.columns([4, 1])
+
     with col_questions:
         cols = st.columns(len(quick_questions))
         for i, question in enumerate(quick_questions):
@@ -140,14 +139,42 @@ def show_productivity_chatbot():
                     
                     st.session_state.chat_history.append({"role": "assistant", "content": response})
                     st.rerun()
-    
-    with col_reset:
+
+    with col_actions:
+        # Reset button
         if st.button("🔄", use_container_width=True, help="Reset conversation"):
             welcome_msg = _generate_welcome_message(df_graph)
             st.session_state.chat_history = [
                 {"role": "assistant", "content": welcome_msg}
             ]
             st.rerun()
+        
+        # Export button
+        if st.button("💬", use_container_width=True, help="Export chat history"):
+            if 'chat_history' not in st.session_state or not st.session_state.chat_history:
+                st.info("No chat history to export.")
+            else:
+                conversation = "# Productivity Assistant Conversation\n\n"
+                conversation += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                conversation += "---\n\n"
+                
+                for i, msg in enumerate(st.session_state.chat_history, 1):
+                    if msg["role"] == "user":
+                        conversation += f"## Message {i} - You\n\n{msg['content']}\n\n"
+                    else:
+                        conversation += f"## Message {i} - Assistant\n\n{msg['content']}\n\n"
+                    conversation += "---\n\n"
+                
+                conversation += f"\n\n*Export generated on {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}*"
+                
+                st.download_button(
+                    label="📄 Download",
+                    data=conversation,
+                    file_name=f'chat_{datetime.now().strftime("%Y%m%d_%H%M")}.md',
+                    mime='text/markdown',
+                    use_container_width=True,
+                    key="download_chat"
+                )
 
     # Chat container
     with st.container(border=True):
@@ -196,6 +223,7 @@ def show_productivity_chatbot():
             
         st.session_state.chat_history.append({"role": "assistant", "content": response})
         st.rerun()
+
 
 def _generate_welcome_message(df_graph):
     """Generates personalized welcome message based on user data"""
@@ -1106,3 +1134,14 @@ Once I have your data, I can suggest specific and achievable goals!"""
     # [Implementation would continue with bilingual support...]
     
     return "Goal creation functionality with language detection implemented."
+
+# # En dashboard/chatbot.py añadir al final:
+# if st.button("💬 Export Chat"):
+#     chat_data = utils.export_utils.export_chatbot_conversation()
+#     if chat_data:
+#         st.download_button(
+#             label="💬 Download Chat",
+#             data=chat_data,
+#             file_name=f'chat_{datetime.now().strftime("%Y%m%d_%H%M")}.md',
+#             mime='text/markdown'
+#         )
