@@ -39,6 +39,11 @@ def _show_classification_statistics():
         return
     
     df = st.session_state.df_original
+    # ✅ AÑADIR ESTA VALIDACIÓN
+    if 'Eisenhower' not in df.columns:
+        df['Eisenhower'] = None
+        st.session_state.df_original = df
+
     total_activities = len(df)
     
     # Calcular estadísticas

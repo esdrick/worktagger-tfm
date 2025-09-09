@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import requests
@@ -5,6 +6,26 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 import utils.export_utils
+
+# Helper for simple language detection based on tokens and chat history
+def _detect_lang(text: str) -> str:
+    t = (text or "").strip().lower()
+    es_tokens = ['cómo','qué','dónde','cuándo','por qué','para','con','sin','desde','objetivo','meta','quiero','metas','propósito','foco']
+    en_tokens = ['how','what','where','when','why','which','who','goal','goals','target','doing','purpose','focus']
+    if any(tok in t for tok in es_tokens):
+        return 'es'
+    if any(tok in t for tok in en_tokens):
+        return 'en'
+    try:
+        for m in reversed(st.session_state.get('chat_history', [])):
+            if m.get('role') == 'user':
+                u = m.get('content','').lower()
+                if any(tok in u for tok in es_tokens) or any(ch in u for ch in 'áéíóúñ¿¡'):
+                    return 'es'
+                return 'en'
+    except:
+        pass
+    return 'en'
 
 def show_productivity_chatbot():
     st.markdown("### 🤖 Intelligent Productivity Assistant")
@@ -812,33 +833,27 @@ def _get_enhanced_ai_response(user_prompt, context, df_graph):
         return "🔐 **Configuration Error**: API key not found. Contact administrator to configure credentials."
     
     # Enhanced multilingual prompt system
-    system_prompt = """You are an expert productivity coach and data analyst. Your job is to:
+    lang = _detect_lang(user_prompt)
+    lang_name = "Spanish" if lang == 'es' else "English"
+    system_prompt = f"""You are an expert productivity coach and data analyst.
 
-1. **Analyze user behavior patterns** based on their real data
-2. **Give specific and actionable advice** based on evidence
-3. **Be motivating but realistic** in your recommendations
-4. **Identify improvement opportunities** constructively
-5. **Suggest proven productivity techniques** and strategies
-6. **Track progress** towards goals
+RULES:
+- Respond ONLY in {lang_name}. Do not use any other language under any circumstance.
+- Mirror the user's language tone and be concise but actionable.
 
-**Communication style:**
-- ALWAYS respond in the same language the user uses in their question
-- If user asks in Spanish, respond completely in Spanish
-- If user asks in English, respond completely in English
-- Use relevant emojis to make conversation more visual
-- Structure responses with clear headings
-- Provide specific numbers and metrics when possible
-- Include concrete calls to action
-- Maintain professional but friendly tone
+Your job:
+1) Analyze user behavior patterns from data
+2) Give specific and actionable advice
+3) Be motivating but realistic
+4) Identify improvement opportunities
+5) Suggest proven techniques
+6) Track progress toward goals
 
-**Specialties:**
-- Time analysis and usage patterns
-- Concentration and flow techniques
-- Distraction management
-- Goal setting and tracking
-- Work routine optimization
-
-Always respond so the user can take immediate action."""
+Style:
+- Use {lang_name} exclusively
+- Use headings, bullets, and metrics
+- Include clear calls to action
+"""
 
     # Add active goals information to context
     goals_info = ""
@@ -887,7 +902,8 @@ def _post_process_response(ai_response, user_prompt, df_graph):
     """Post-processes AI response to add specific functionalities"""
     
     # Detect language to provide contextual action buttons
-    is_spanish = any(word in user_prompt.lower() for word in ['cómo', 'qué', 'dónde', 'cuándo', 'por', 'para', 'con', 'sin', 'desde'])
+    lang = _detect_lang(user_prompt)
+    is_spanish = (lang == 'es')
     
     # Add contextual action buttons at the end of response
     action_buttons = ""
@@ -953,7 +969,8 @@ def _activate_focus_mode(user_prompt, df_graph):
     """Activates focus mode with specific recommendations"""
     
     # Detect language
-    is_spanish = any(word in user_prompt.lower() for word in ['activar', 'foco', 'modo', 'concentrar'])
+    lang = _detect_lang(user_prompt)
+    is_spanish = (lang == 'es')
     
     # Mark focus mode as active
     st.session_state.productivity_goals["focus_mode"] = True
@@ -1103,8 +1120,8 @@ Perfect! I've analyzed your patterns and have a personalized plan to maximize yo
 def _suggest_goal_creation(user_prompt, df_graph):
     """Suggests goal creation based on user data"""
     
-    # Detect language
-    is_spanish = any(word in user_prompt.lower() for word in ['objetivo', 'meta', 'crear', 'definir'])
+    lang = _detect_lang(user_prompt)
+    is_spanish = (lang == 'es')
     
     if df_graph is None or df_graph.empty:
         if is_spanish:

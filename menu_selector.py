@@ -4,6 +4,7 @@ def render_menu_selector():
     # Ensure it's marked as loaded correctly after assigning df_original
     if "navbar_selection" not in st.session_state:
         st.session_state["navbar_selection"] = "📋 Main Screen"
+    
     with st.container():
         # Estilos solo para navbar
         st.markdown("""
@@ -22,6 +23,11 @@ def render_menu_selector():
                 border-color: #FA3E25 !important;
                 color: white !important;
             }
+            /* Estilo para botones deshabilitados */
+            button[disabled] {
+                opacity: 0.5 !important;
+                cursor: not-allowed !important;
+            }
             </style>
         """, unsafe_allow_html=True)
 
@@ -36,6 +42,9 @@ def render_menu_selector():
         # Create columns for the buttons
         nav_cols = st.columns(len(nav_options))
         
+        # Check if data is loaded
+        has_data = "df_original" in st.session_state
+        
         # Get current selection
         current_selection = st.session_state.get("navbar_selection", "📋 Main Screen")
 
@@ -43,13 +52,18 @@ def render_menu_selector():
         for idx, (label, value) in enumerate(nav_options.items()):
             with nav_cols[idx]:
                 is_active = (label == current_selection)
+                
+                # Disable buttons if no data loaded (except Main Screen)
+                is_disabled = not has_data and value != "main"
+                
                 if st.button(
                     label, 
-                    key=label, 
+                    key=label,
                     use_container_width=True,
-                    type="primary" if is_active else "secondary"
+                    type="primary" if is_active else "secondary",
+                    disabled=is_disabled  # 👈 ÚNICA MEJORA SUGERIDA
                 ):
                     st.session_state["navbar_selection"] = label
-                    st.rerun() 
-
+                    st.rerun()
+    
     return st.session_state.get("navbar_selection", "📋 Main Screen")

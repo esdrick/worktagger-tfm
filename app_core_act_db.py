@@ -199,6 +199,7 @@ def display_undo_button():
     def undo_last_action():
         st.session_state.df_original = st.session_state.undo_df
         st.session_state.undo_df = None
+        st.rerun()
 
     st.button("↩️ Undo", disabled=(st.session_state.undo_df is None), on_click = undo_last_action, use_container_width=True)
 

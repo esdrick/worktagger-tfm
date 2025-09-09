@@ -5,9 +5,10 @@ from core_act import generate_heuristic_rules
 def clasificar_por_heuristica(app, title):
     subact, act = match_heuristic_rule(app, title)
     if subact:
+        # solo devuelve algo si encontró una regla válida
         return subact, act
-    else:
-        return "Unclassified", None
+    # si no encontró nada, no devuelve etiquetas
+    return None, None
 
 category_to_activity = {
     "Communication": "Coordination",
