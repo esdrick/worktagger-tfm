@@ -1,3 +1,0 @@
-0000000000000000000000000000000000000000 cf5812a428dbd3e2a0b0135ac70aa52f97be158e EsdDev <esdrickrebolledo@gmail.com> 1750170336 +0200	clone: from https://github.com/project-pivot/worktagger.git
-cf5812a428dbd3e2a0b0135ac70aa52f97be158e 964d1186769c277fafeb58ec9b55d4d8b684f68b EsdDev <esdrickrebolledo@gmail.com> 1753801682 +0200	commit: Initial commit: base WorkTaggler code with changes
-964d1186769c277fafeb58ec9b55d4d8b684f68b 40e144bdf85f6df6624c52c29cdbb912ab9c9bca EsdDev <esdrickrebolledo@gmail.com> 1755179572 +0200	commit: Backup nuevas funcionalidades antes de refactorizar el proyecto en módulos

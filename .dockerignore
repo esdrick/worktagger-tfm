@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/*.json
+.streamlit/*.db
+
+# Local data
+*.csv
+*.db
+tracker.db
+data/
+datasets/
+sample_data/
+exports/
+reports/
+
+# OS / editor junk
+.DS_Store
+.vscode/
+.idea/
+
+# Docker
+Dockerfile
+docker-compose*.yml

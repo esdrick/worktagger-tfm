@@ -7,6 +7,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+.idea
 .Python
 build/
 develop-eggs/
@@ -157,9 +158,11 @@ cython_debug/
 # Archivos locales de datos
 *.csv
 *.db
+tracker.db
 
 # Configuraciones sensibles de Streamlit
 .streamlit/secrets.toml
+
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
@@ -167,3 +170,57 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# --- OS / Editor junk ---
+.DS_Store
+Thumbs.db
+
+# --- VS Code project files ---
+.vscode/
+*.code-workspace
+
+# --- Streamlit runtime state (keep secrets already ignored) ---
+.streamlit/*.json
+.streamlit/*.db
+.streamlit/credentials.toml
+
+# --- Docker / environment overrides ---
+.env.*
+*.env
+.envrc
+.direnv/
+
+docker-compose.override.yml
+
+# --- Data folders & large artifacts (adjust if you want some tracked) ---
+data/
+datasets/
+sample_data/
+samples/
+exports/
+reports/
+artifacts/
+
+# Common data formats (optional; comment out if you want to track)
+*.parquet
+*.feather
+*.xlsx
+*.sqlite
+*.sqlite3
+
+# --- Security / keys ---
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+
+# --- Extra caches (recursive) ---
+**/.ipynb_checkpoints/
+**/.mypy_cache/
+**/.pytest_cache/
+**/__pycache__/
+
+# --- Logs (global) ---
+*.log
