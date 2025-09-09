@@ -176,7 +176,7 @@ def show_productivity_recommendations():
         </div>
         """, unsafe_allow_html=True)
 
-    # 🎮 INTERACTIVE GOAL CONFIGURATOR
+    # 🎮 INTERACTIVE GOAL CONFIGURATOR - LÓGICA CORREGIDA
     st.markdown("### 🎮 Set Goals")
     
     with st.container(border=True):
@@ -215,47 +215,113 @@ def show_productivity_recommendations():
             
         with col2:
             limite_improductivo = st.slider(
-                f"🚫 Unproductive time limit {periodo_texto} (minutes)",
+                f"🚫 Your unproductive time limit {periodo_texto} (minutes)",
                 min_value=0, 
                 max_value=max_improductivo, 
                 value=tiempo_recomendado_improductivo,  # Use recommended value
                 step=15,
-                help="Maximum time in quadrant IV (distractions)"
+                help="Set your personal limit for quadrant IV activities (distractions)"
             )
             # Show specific recommendation below slider
             st.caption(f"💡 **Recommended**: {tiempo_recomendado_improductivo} min ({tiempo_recomendado_improductivo/60:.1f}h) - Maximum 15% of total time")
         
-        # Spacing between sections
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Progress towards goals - CORRECTED
-        progreso_productivo = min(100, (tiempo_productivo / objetivo_productivo) * 100) if objetivo_productivo > 0 else 0
-        progreso_limite = min(100, (tiempo_improductivo / limite_improductivo) * 100) if limite_improductivo > 0 else 0
-        
+
+    
+        # Métricas lado a lado
         col1, col2 = st.columns(2)
         
         with col1:
-            color_productivo = "#10B981" if progreso_productivo >= 100 else "#F59E0B" if progreso_productivo >= 80 else "#EF4444"
-            st.markdown(f"""
-            **Productive progress: {progreso_productivo:.0f}%** ({tiempo_productivo:.0f}/{objetivo_productivo} min)
-            <div style="background: #e9ecef; border-radius: 10px; height: 20px; overflow: hidden; margin-top: 8px;">
-                <div style="background: {color_productivo}; height: 100%; width: {min(100, progreso_productivo)}%; transition: width 0.3s;"></div>
-            </div>
-            """, unsafe_allow_html=True)
+            # ANÁLISIS DE TIEMPO PRODUCTIVO
+            st.markdown("#### 🎯 Productive Time Goal")
             
-        with col2:
-            color_limite = "#EF4444" if progreso_limite > 100 else "#F59E0B" if progreso_limite > 80 else "#10B981"
-            st.markdown(f"""
-            **Unproductive usage: {progreso_limite:.0f}%** ({tiempo_improductivo:.0f}/{limite_improductivo} min)
-            <div style="background: #e9ecef; border-radius: 10px; height: 20px; overflow: hidden; margin-top: 8px;">
-                <div style="background: {color_limite}; height: 100%; width: {min(100, progreso_limite)}%; transition: width 0.3s;"></div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Mostrar objetivo vs real
+            diferencia_productivo = tiempo_productivo - objetivo_productivo
+            
+            if tiempo_productivo >= objetivo_productivo:
+                st.success(f"""
+                ✅ **Goal achieved!**
+                
+                - **Your goal**: {objetivo_productivo:.0f} min
+                - **Actual time**: {tiempo_productivo:.0f} min
+                - **Surplus**: +{diferencia_productivo:.0f} min
+                
+                Great job maintaining productive focus!
+                """)
+            else:
+                deficit = objetivo_productivo - tiempo_productivo
+                porcentaje_logrado = (tiempo_productivo / objetivo_productivo * 100) if objetivo_productivo > 0 else 0
+                
+                if porcentaje_logrado >= 80:
+                    st.info(f"""
+                    📈 **Almost there!**
+                    
+                    - **Your goal**: {objetivo_productivo:.0f} min
+                    - **Actual time**: {tiempo_productivo:.0f} min
+                    - **Missing**: {deficit:.0f} min ({100-porcentaje_logrado:.0f}% to go)
+                    
+                    You're {porcentaje_logrado:.0f}% of the way to your goal.
+                    """)
+                else:
+                    st.warning(f"""
+                    ⚠️ **More focus needed**
+                    
+                    - **Your goal**: {objetivo_productivo:.0f} min
+                    - **Actual time**: {tiempo_productivo:.0f} min
+                    - **Missing**: {deficit:.0f} min
+                    
+                    Try scheduling more time for important tasks.
+                    """)
         
-        # Close padding div
-        st.markdown("</div>", unsafe_allow_html=True)
+        with col2:
+            # ANÁLISIS DE LÍMITE IMPRODUCTIVO
+            st.markdown("#### 🚫 Unproductive Time Limit")
+            
+            if tiempo_improductivo <= limite_improductivo:
+                # DENTRO DEL LÍMITE
+                margen = limite_improductivo - tiempo_improductivo
+                
+                if tiempo_improductivo == 0:
+                    st.success(f"""
+                    🎯 **Perfect focus!**
+                    
+                    - **Your limit**: {limite_improductivo:.0f} min
+                    - **Actual time**: {tiempo_improductivo:.0f} min
+                    
+                    Zero unproductive time detected!
+                    """)
+                else:
+                    st.success(f"""
+                    ✅ **Within your limit!**
+                    
+                    - **Your limit**: {limite_improductivo:.0f} min
+                    - **Actual time**: {tiempo_improductivo:.0f} min
+                    - **Margin left**: {margen:.0f} min
+                    
+                    Good self-control on distractions.
+                    """)
+            else:
+                # LÍMITE EXCEDIDO - ALERTA
+                exceso = tiempo_improductivo - limite_improductivo
+                porcentaje_exceso = (exceso / limite_improductivo * 100) if limite_improductivo > 0 else 0
+                
+                st.error(f"""
+                🚨 **Limit exceeded!**
+                
+                - **Your limit**: {limite_improductivo:.0f} min
+                - **Actual time**: {tiempo_improductivo:.0f} min
+                - **Exceeded by**: +{exceso:.0f} min ({porcentaje_exceso:.0f}% over)
+                
+                **💡 Suggestions:**
+                - Use app blockers during work hours
+                - Set specific break times for entertainment
+                - Try the Pomodoro technique
+                """)
+
+                    # Close padding div
+            st.markdown("</div>", unsafe_allow_html=True)
 
     # 🚫 PROBLEMATIC APPS WITH BETTER DESIGN
+    st.divider()
     st.markdown("### 🚫 Apps to Reduce")
     
     df_apps = df[df["Eisenhower"] == EISEN_OPTIONS[3]].groupby("App")["Duration_min"].sum().sort_values(ascending=False)
