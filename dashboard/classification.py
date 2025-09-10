@@ -81,7 +81,6 @@ def _show_classification_statistics():
     # === HEADER ===
     st.markdown(f"""
     <div style="
-        background: white;
         border: 2px solid {status_color};
         border-radius: 12px;
         padding: 20px;

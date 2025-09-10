@@ -29,6 +29,32 @@ def _detect_lang(text: str) -> str:
 
 def show_productivity_chatbot():
     st.markdown("### 🤖 Intelligent Productivity Assistant")
+    # Theme-aware bubble styles (border-only, inherits text color)
+    st.markdown(
+        """
+        <style>
+        .chat-bubble {
+            padding: 12px 16px;
+            border-radius: 16px 16px 16px 4px;
+            margin: 8px 60px 8px 0;
+            font-size: 14px;
+            line-height: 1.5;
+            border: 1px solid;          /* show bubble outline */
+            background: transparent;    /* no fill, only border */
+            color: inherit;             /* follow theme text color */
+        }
+        /* Light mode: soft grey border */
+        @media (prefers-color-scheme: light) {
+            .chat-bubble.assistant { border-color: #e0e0e0; }
+        }
+        /* Dark mode: darker border */
+        @media (prefers-color-scheme: dark) {
+            .chat-bubble.assistant { border-color: #3a3f44; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.markdown("Ask questions about your time, productivity, or request personalized recommendations.")
     
     # Initialize goal system if it doesn't exist
@@ -217,15 +243,7 @@ def show_productivity_chatbot():
                 """, unsafe_allow_html=True)
             else:
                 st.markdown(f"""
-                <div style="
-                    background: #f8f8f8; 
-                    color: #333; 
-                    padding: 12px 16px; 
-                    border-radius: 16px 16px 16px 4px; 
-                    margin: 8px 60px 8px 0;
-                    font-size: 14px; 
-                    line-height: 1.5;
-                ">
+                <div class="chat-bubble assistant">
                     {msg["content"]}
                 </div>
                 """, unsafe_allow_html=True)
@@ -336,7 +354,6 @@ def _show_enhanced_stats_panel(df_graph):
         # Enhanced visual panel
         st.markdown(f"""
         <div style="
-            background: white;
             border: 1px solid #e8e8e8;
             border-radius: 12px;
             padding: 24px;

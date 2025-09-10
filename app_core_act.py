@@ -121,6 +121,23 @@ def paginate_df(dataset):
     page = split_df(dataset, batch_size, st.session_state.current_page)
     return page, batch_size, total_pages
 
+def apply_theme_compatible_styles():
+    st.markdown("""
+    <style>
+    div[data-testid="stExpander"] {
+    border: 1px solid rgba(128,128,128,0.3);   /* asegura borde visible */
+    border-radius: 10px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    /* Hover: color acento y un leve glow */
+    div[data-testid="stExpander"]:hover {
+    border-color: #FA3E25;
+    box-shadow: 0 0 0 2px rgba(250,62,37,0.12);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 def apply_styles(page, format_table):
     toggle_block_colours = format_table['toggle_block_colours']
     toggle_begin_end_colours = format_table['toggle_begin_end_colours']
@@ -172,13 +189,10 @@ def download_csv(df):
     )
 
 def asignar_color(s):
-    """Asigna color de fondo basado en la actividad de forma segura"""
-    col = '#FFFFFF'
+    base_color = 'transparent' 
     
-    # Obtener diccionario de colores de forma segura
     dicc_core_color = st.session_state.get("dicc_core_color", {})
     
-    # Extraer actividad de forma segura
     activity = None
     if hasattr(s, 'Activity') and s.Activity is not None:
         if isinstance(s.Activity, list):
@@ -186,14 +200,18 @@ def asignar_color(s):
         else:
             activity = s.Activity
     
-    # Asignar color si existe
     if activity and activity in dicc_core_color:
-        col = dicc_core_color[activity]
+        original_color = dicc_core_color[activity]
+        if original_color.startswith('#'):
+            r = int(original_color[1:3], 16)
+            g = int(original_color[3:5], 16)
+            b = int(original_color[5:7], 16)
+            base_color = f'rgba({r}, {g}, {b}, 0.3)'
 
-    return [f'background-color:{col}'] * len(s)
+    return [f'background-color:{base_color}'] * len(s)
 
 def asignar_color_sin_estilos(s):
-    return ['background-color:#FFFFFF'] * len(s)
+    return [''] * len(s) 
 
 def display_undo_button():
     def undo_last_action():
@@ -349,19 +367,7 @@ def display_table_formatter(selected_view):
         'max_time_between_activities': max_time_between_activities
     }
 
-# --- Custom Styles ---
-st.markdown("""
-<style>
-h1, h2, h3, h4 {
-    color: #003366;
-}
-div[data-testid="stExpander"] {
-    border: 2px solid #cccccc;
-    border-radius: 10px;
-    background-color: #f9f9f9;
-}
-</style>
-""", unsafe_allow_html=True)
+apply_theme_compatible_styles()
 
 # --- UI Principal ---
 upload_expanded = "df_original" not in st.session_state
