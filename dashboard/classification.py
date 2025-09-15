@@ -308,7 +308,6 @@ def automated_classification(view_options, mensaje_container):
                 st.error("⚠️ **No rows selected**: Select some rows in the main table.")
                 return
         
-        # EL RESTO DE TU CÓDIGO ACTUAL CONTINÚA IGUAL...
         openai_org = st.session_state.openai_org
         all = st.session_state.df_original
 
@@ -428,167 +427,171 @@ def manual_eisenhower_classification(apply_label_to_selection):
     )
 
 def classify_eisenhower_auto():
-    """Clasificación automática de Eisenhower con GPT"""
+    """Clasificación automática de Eisenhower con GPT - VERSIÓN SIN EMOJIS"""
     try:
-        # AGREGAR ESTA VALIDACIÓN AL INICIO
+        # 1. VALIDAR API KEY
         openai_key = st.session_state.get('openai_key_eisen', '').strip()
         if not openai_key:
-            st.error("⚠️ **API Key required**: Enter your API key to continue.")
+            st.error("API Key required: Enter your API key to continue.")
             return
             
-        # VALIDAR SELECCIÓN SI ES NECESARIO
+        # 2. OBTENER DATOS
+        openai_org = st.session_state.get('openai_org_eisen', '').strip()
         tipo_datos = st.session_state.get('eisen_data_type', 'All')
+        df = st.session_state.df_original
+        
         if tipo_datos == "Selected rows":
             if 'filas_seleccionadas' not in st.session_state:
-                st.error("⚠️ **No selection**: Select some rows in the main table first.")
+                st.error("No selection: Select some rows in the main table first.")
                 return
             selected_ids = st.session_state.filas_seleccionadas['ID'].tolist()
             if not selected_ids:
-                st.error("⚠️ **No rows selected**: Select some rows in the main table.")
+                st.error("No rows selected: Select some rows in the main table.")
                 return
-        
-        # EL RESTO DE TU CÓDIGO ACTUAL CONTINÚA IGUAL...
-        openai_org = st.session_state.openai_org_eisen
-        df = st.session_state.df_original
-
-        tipo_datos = st.session_state.eisen_data_type
-        if tipo_datos == "All":
-            to_classify = df[df['Subactivity'].notna() & df['Eisenhower'].isna()]
-        elif tipo_datos == "Selected rows":
-            selected_ids = st.session_state.filas_seleccionadas['ID'].tolist()
             to_classify = df[df["ID"].isin(selected_ids) & df['Subactivity'].notna()]
         else:
-            st.warning("Invalid data type.")
-            return
+            to_classify = df[df['Subactivity'].notna() & df['Eisenhower'].isna()]
 
         if to_classify.empty:
-            st.warning("There are no rows that can be classified automatically.")
+            st.warning("No rows available for classification.")
             return
 
-        st.session_state.undo_df = df.copy()
+        # 3. FUNCIÓN PARA LIMPIAR TEXTO
+        def clean_text(text):
+            """Limpia el texto de caracteres problemáticos"""
+            if pd.isna(text) or text is None:
+                return ""
+            # Convertir a string y limpiar emojis/caracteres especiales
+            text = str(text)
+            # Remover caracteres no ASCII
+            text = text.encode('ascii', errors='ignore').decode('ascii')
+            return text.strip()
 
-        EISEN_OPTIONS_LOCAL = [
-            "I: Urgent & Important",
-            "II: Not urgent but Important",
-            "III: Urgent but Not important",
-            "IV: Not urgent & Not important"
-        ]
-
+        # 4. CONFIGURAR API
         usar_openai = st.session_state.get("usar_openai", False)
-        resultados_finales = []
-        batch_size = 10
+        
+        if usar_openai:
+            api_url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {openai_key}",
+                "Content-Type": "application/json; charset=utf-8"
+            }
+            if openai_org:
+                headers["OpenAI-Organization"] = openai_org
+            model = "gpt-3.5-turbo"
+        else:
+            api_url = "https://openrouter.ai/api/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {openai_key}",
+                "Content-Type": "application/json; charset=utf-8",
+                "HTTP-Referer": "https://your-app.streamlit.app"
+            }
+            model = "mistralai/mistral-7b-instruct:free"
 
-        for start in range(0, len(to_classify), batch_size):
+        # 5. PROCESAR EN LOTES
+        st.session_state.undo_df = df.copy()
+        resultados_finales = []
+        batch_size = 3
+        total_batches = math.ceil(len(to_classify) / batch_size)
+
+        progress_bar = st.progress(0, text="Starting classification...")
+
+        for batch_idx, start in enumerate(range(0, len(to_classify), batch_size)):
             batch = to_classify.iloc[start:start + batch_size]
+            
+            progress = (batch_idx + 1) / total_batches
+            progress_bar.progress(progress, text=f"Processing batch {batch_idx + 1}/{total_batches}")
+            
+            # Preparar mensajes CON TEXTO LIMPIO
+            tasks_text = []
+            for i, (_, row) in enumerate(batch.iterrows(), 1):
+                # LIMPIAR TEXTO AQUÍ
+                desc = clean_text(row['Subactivity']) or clean_text(row['Merged_titles'])
+                duration = row['Duration'] / 60
+                tasks_text.append(f"{i}. {desc} ({duration:.1f} min)")
+
             mensajes = [
                 {
                     "role": "system",
-                    "content": "You are a productivity expert assistant. Label each activity into an Eisenhower quadrant: 'I: Urgent & Important', 'II: Not urgent but Important', 'III: Urgent but Not important', 'IV: Not urgent & Not important'."
+                    "content": "You are a productivity expert. Classify each task into exactly one Eisenhower quadrant. Respond with only the quadrant number (I, II, III, or IV) for each task."
+                },
+                {
+                    "role": "user", 
+                    "content": "Classify these tasks into Eisenhower quadrants (I, II, III, IV):\n\n" + 
+                              "\n".join(tasks_text) + 
+                              "\n\nRespond with only: 1. I\n2. II\n3. III\n(etc.)"
                 }
             ]
 
-            inputs = []
-            for _, row in batch.iterrows():
-                desc = row['Subactivity'] or row['Merged_titles']
-                duracion = row['Duration'] / 60
-                inputs.append(f"Task: {desc}\nDuration: {duracion:.1f} minutes")
-
-            prompts = "\n\n".join([f"{i+1}. {txt}" for i, txt in enumerate(inputs)])
-            mensajes.append({
-              "role": "user",
-              "content":
-                "Classify the following tasks one by one. Return exactly one label for each, using only:\n\n"
-                "I: Urgent & Important\n"
-                "II: Not urgent but Important\n"
-                "III: Urgent but Not important\n"
-                "IV: Not urgent & Not important\n\n"
-                f"Example format:\n1. I: Urgent & Important\n2. II: Not urgent but Important\n\nTasks:\n{prompts}"
-            })
-
-            if usar_openai:
-                api_url = "https://api.openai.com/v1/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {openai_key}",
-                    "Content-Type": "application/json"
-                }
-                model = "gpt-3.5-turbo"
-            else:
-                api_url = "https://openrouter.ai/api/v1/chat/completions"
-                headers = {
-                    "Authorization": f"Bearer {openai_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://tu-aplicacion.streamlit.app"
-                }
-                model = "mistralai/mistral-7b-instruct:free"
-
+            # Realizar petición
             payload = {
                 "model": model,
                 "messages": mensajes,
-                "temperature": 0.2
+                "temperature": 0.1,
+                "max_tokens": 100
             }
 
-            response = requests.post(api_url, headers=headers, json=payload)
-
-            if response.status_code == 200:
-                texto = response.json()["choices"][0]["message"]["content"]
-
-                if not texto.strip():
-                    st.warning(f"The model did not return any useful response in batch {start//batch_size + 1}.")
-                    resultados_finales.extend([None] * len(batch))
-                    continue
-
-                lineas = texto.strip().splitlines()
-                etiquetas_extraidas = []
-                for linea in lineas:
-                    match = re.match(r"\s*\d+\.\s*(I|II|III|IV)\s*:", linea.strip())
-                    if match:
-                        etiqueta = match.group(1)
-                        for op in EISEN_OPTIONS_LOCAL:
-                            if etiqueta in op:
-                                etiquetas_extraidas.append(op)
-                                break
-                        else:
-                            etiquetas_extraidas.append(None)
-
-                if len(etiquetas_extraidas) == len(batch):
-                    resultados_finales.extend(etiquetas_extraidas)
+            try:
+                # ENVIAR CON ENCODING EXPLÍCITO
+                response = requests.post(
+                    api_url, 
+                    headers=headers, 
+                    json=payload, 
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    content = response.json()["choices"][0]["message"]["content"]
+                    
+                    # Parsear respuesta
+                    lines = content.strip().split('\n')
+                    batch_results = []
+                    
+                    for line in lines:
+                        match = re.search(r'\b(I|II|III|IV)\b', line)
+                        if match:
+                            quadrant = match.group(1)
+                            full_label = {
+                                'I': 'I: Urgent & Important',
+                                'II': 'II: Not urgent but Important', 
+                                'III': 'III: Urgent but Not important',
+                                'IV': 'IV: Not urgent & Not important'
+                            }.get(quadrant)
+                            batch_results.append(full_label)
+                    
+                    # Completar batch si es necesario
+                    while len(batch_results) < len(batch):
+                        batch_results.append('IV: Not urgent & Not important')
+                    
+                    resultados_finales.extend(batch_results[:len(batch)])
+                    
                 else:
-                    st.error(f"⚠️ Error processing batch {start//batch_size + 1}: expected {len(batch)} labels, got {len(etiquetas_extraidas)}.")
+                    st.error(f"API Error {response.status_code}: {response.text}")
                     resultados_finales.extend([None] * len(batch))
-            else:
+                    
+            except Exception as e:
+                st.error(f"Request error: {str(e)}")
                 resultados_finales.extend([None] * len(batch))
-                if response.status_code == 401:
-                    st.error("❌ The API key is invalid or has expired. Check your settings.")
-                elif response.status_code == 429:
-                    st.warning("🚫 You have reached the API usage limit. Check your plan or try again later.")
-                elif response.status_code == 403:
-                    st.warning("🔒 Access denied. Your account may not have sufficient permissions.")
-                else:
-                    st.error(f"❌ Unexpected error (code {response.status_code}). Try again or check your connection.")
 
-        if len(resultados_finales) != len(to_classify):
-            if len(resultados_finales) == 1:
-                resultados_finales = resultados_finales * len(to_classify)
-                st.info(f"A single label '{resultados_finales[0]}' was applied to all {len(to_classify)} tasks.")
-            else:
-                st.error(f"Number of labels does not match: expected {len(to_classify)}, got {len(resultados_finales)}.")
-                return
-
-        resultados_series = pd.Series(resultados_finales, index=to_classify.index)
-        mask = df.loc[to_classify.index, "Eisenhower"].isna()
-        df.loc[to_classify.index[mask], "Eisenhower"] = resultados_series.loc[mask]
+        # 6. APLICAR RESULTADOS
+        progress_bar.progress(1.0, text="Applying results...")
         
-        if all(res is not None for res in resultados_finales):
-            st.success("Classification completed.")
+        if len(resultados_finales) == len(to_classify):
+            df.loc[to_classify.index, "Eisenhower"] = resultados_finales
+            
+            successful_count = sum(1 for r in resultados_finales if r is not None)
+            st.success(f"Successfully classified {successful_count}/{len(to_classify)} activities")
+            
+            if successful_count < len(to_classify):
+                st.warning(f"{len(to_classify) - successful_count} activities could not be classified")
         else:
-            st.warning("Incomplete classification. Some tasks could not be labeled.")
-        
-        if any(r is None for r in resultados_finales):
-            st.info("Rows with previous labels were not overwritten. Make sure you have enough quota and a valid key.")
+            st.error("Classification failed due to response mismatch")
+            
+        progress_bar.empty()
 
     except Exception as e:
-        logging.exception("Error clasificando Eisenhower automático", exc_info=e)
-        st.error("Unexpected error during automatic classification.")
+        logging.exception("Error in Eisenhower classification", exc_info=e)
+        st.error(f"Unexpected error: {str(e)}")
 
 def classify_eisenhower_heuristic():
     """Clasificación heurística de Eisenhower"""

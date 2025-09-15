@@ -584,6 +584,6 @@ if "df_original" in st.session_state:
             plot_eisenhower_matrix(st.session_state.df_original)
             show_productivity_recommendations()
 
-    elif selected_nav == "🤖 Productivity Assistant (beta)":
+    elif selected_nav == "🤖 Productivity Assistant":
         show_productivity_chatbot()
         

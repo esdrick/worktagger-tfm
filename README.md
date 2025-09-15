@@ -76,38 +76,36 @@ Beerepoot, Iris, Barenholz, Daniël, Beekhuis, Stijn, Gulden, Jens, Lee, Suhwan,
 
 ## ✨ Improvements in this TFM Version
 
-This fork significantly extends the original Work Tagger with the following key contributions:
+This version extends the original Work Tagger with the following key features:
 
 ### 🚀 **Simplified Data Import**
-- **One-click setup**: Automatic conversion of `tracker.db` (SQLite) from Tockler
-- **Universal compatibility**: Full support for legacy CSV exports
-- **Massive time savings**: Reduced setup from 7 manual steps (~30 minutes) to a single click (<5 seconds)
+- **Automatic conversion** of `tracker.db` (SQLite) from Tockler for easy data loading
+- **Support for legacy CSV exports** to maintain compatibility with older data formats
+- **Streamlined process** reducing manual steps needed to import data
 
 ### 🎯 **Enhanced Usability**
-- **Interactive onboarding**: Step-by-step tutorial for new users
-- **Real-time feedback**: Live statistics, validation messages, and progress tracking
-- **Improved UX**: Clearer error handling and intuitive user interface
+- **Interactive onboarding tutorial** to guide new users through the application
+- **Real-time validation messages** and feedback to improve data labeling accuracy
+- **User-friendly interface** with clear controls and instructions
 
-### 📊 **Advanced Visualizations**
-- **Interactive dashboards**: Activity distribution, timelines, and heat maps
-- **Eisenhower Matrix**: Visual quadrant analysis with productivity insights
-- **Smart goal tracking**: Progress monitoring with personalized alerts and recommendations
+### 📊 **Basic Visualizations and Dashboards**
+- **Activity distribution charts** and timelines for data exploration
+- **Eisenhower Matrix** to categorize tasks by urgency and importance
+- **Goal tracking features** to monitor progress within the application
 
-### 🤖 **Intelligent Assistant**
-- **AI-powered chatbot**: Personalized productivity recommendations
-- **Pattern recognition**: Automatic analysis of daily habits (e.g., "Peak productivity: 10-12h")
-- **Continuous improvement**: Feedback loop for long-term productivity optimization
+### 🤖 **Intelligent Assistance**
+- **AI-powered chatbot** integrated with OpenAI/OpenRouter APIs for productivity support
+- **Multiple labeling methods** including manual, heuristic rules, and AI-based classification
 
-### 🏷️ **Extended Classification Options**
-- **Heuristic rules**: Automatic labeling with bilingual, keyword-based detection
-- **GPT integration**: Flexible zero-shot classification using OpenAI/OpenRouter APIs
-- **Hybrid approach**: Combines automation with manual control for maximum accuracy
+### 🏷️ **Extended Classification and Export Options**
+- **Manual and automatic classification** of activities and cases
+- **Export capabilities** to PDF and CSV formats for further analysis or reporting
 
-### 🔧 **Deployment & Reproducibility**
-- **Containerized**: Docker support for consistent environments
-- **Cloud-ready**: Streamlit Cloud deployment with easy sharing
-- **Privacy-first**: No central data storage - all information remains local to your device
+### 🔧 **Deployment and Reproducibility**
+- **Docker support** for consistent and portable environments
+- **Streamlit Cloud deployment** enabling easy access and sharing
+- **Privacy-conscious design** with no centralized data storage; all data remains local
 
 ---
 
-> **Impact**: These improvements transform Work Tagger from a basic research tool into a comprehensive productivity platform, reducing setup complexity by 85% while adding enterprise-grade analytics and AI assistance.
+> **Impact**: These improvements reduce setup complexity, making Work Tagger accessible to users without technical expertise, while providing a practical tool for academic research and productivity analysis.

@@ -36,7 +36,7 @@ def render_menu_selector():
             "📋 Main Screen": "main",
             "📊 Activities Dashboard": "dashboard",
             "🧭 Eisenhower Matrix – View details by subactivity": "matrix",
-            "🤖 Productivity Assistant (beta)": "assistant"
+            "🤖 Productivity Assistant": "assistant"
         }
 
         # Create columns for the buttons
