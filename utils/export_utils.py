@@ -85,9 +85,9 @@ def add_summary_section(story, styles):
     
     # Análisis de fechas
     if 'Begin' in df.columns:
-        df['Date'] = pd.to_datetime(df['Begin']).dt.date
-        date_range = f"{df['Date'].min()} to {df['Date'].max()}"
-        unique_days = df['Date'].nunique()
+        dates = pd.to_datetime(df['Begin']).dt.date
+        date_range = f"{dates.min()} to {dates.max()}"
+        unique_days = pd.Series(dates).nunique()
     else:
         date_range = "Not available"
         unique_days = "N/A"
@@ -238,7 +238,7 @@ def add_activity_dashboard_section(story, styles):
         return story
     
     # Análisis de subactividades
-    df_subact = df[df['Subactivity'].notna()]
+    df_subact = df[df['Subactivity'].notna()].copy()
     subact_summary = df_subact.groupby('Subactivity').agg({
         'Duration': 'sum',
         'Activity': 'count'

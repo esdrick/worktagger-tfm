@@ -323,13 +323,20 @@ def show_productivity_recommendations():
     # 🚫 PROBLEMATIC APPS WITH BETTER DESIGN
     st.divider()
     st.markdown("### 🚫 Apps to Reduce")
-    
-    df_apps = df[df["Eisenhower"] == EISEN_OPTIONS[3]].groupby("App")["Duration_min"].sum().sort_values(ascending=False)
-    
-    if not df_apps.empty:
-        for i, (app, tiempo) in enumerate(df_apps.head(5).items()):
-            if tiempo >= 10:  # Only show apps with significant usage
+
+    # Cambiar para agrupar por App + Subactividad
+    df_apps_detailed = (df[df["Eisenhower"] == EISEN_OPTIONS[3]]
+                    .groupby(["App", "Subactivity"])["Duration_min"]
+                    .sum()
+                    .sort_values(ascending=False))
+
+    if not df_apps_detailed.empty:
+        for i, ((app, subactivity), tiempo) in enumerate(df_apps_detailed.head(5).items()):
+            if tiempo >= 10:
                 urgencia = "🔴 Critical" if tiempo >= 60 else "🟡 Moderate" if tiempo >= 30 else "🟢 Minor"
+                
+                # Mostrar App: Subactividad específica
+                display_name = f"{app}: {subactivity}" if subactivity else app
                 
                 st.markdown(f"""
                 <div style="
@@ -343,7 +350,7 @@ def show_productivity_recommendations():
                     align-items: center;
                 ">
                     <div>
-                        <strong>{app}</strong><br>
+                        <strong>{display_name}</strong><br>
                         <span style="color: #666; font-size: 14px;">{tiempo:.0f} minutes wasted</span>
                     </div>
                     <div style="text-align: right;">

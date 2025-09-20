@@ -51,6 +51,9 @@ def show_productivity_chatbot():
         @media (prefers-color-scheme: dark) {
             .chat-bubble.assistant { border-color: #3a3f44; }
         }
+        /* Prevent accidental strikethrough from Markdown (<del>, <s>) or ~~text~~ */
+        .chat-bubble, .chat-bubble * { text-decoration: none !important; }
+        .chat-bubble del, .chat-bubble s, .chat-bubble strike { text-decoration: none !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -242,9 +245,11 @@ def show_productivity_chatbot():
                 </div>
                 """, unsafe_allow_html=True)
             else:
+                # Sanitize possible Markdown strikethrough markers so the whole reply doesn't render with a line-through
+                content = msg["content"].replace("~~", r"\~\~")
                 st.markdown(f"""
                 <div class="chat-bubble assistant">
-                    {msg["content"]}
+                    {content}
                 </div>
                 """, unsafe_allow_html=True)
 
