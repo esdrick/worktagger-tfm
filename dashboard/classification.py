@@ -8,6 +8,8 @@ from heuristic_rules import clasificar_por_heuristica
 from heuristic_eisenhower import clasificar_eisenhower_por_heuristica
 import clasificacion_core_act
 import math  
+from custom_heuristic_manager import CustomHeuristicManager, show_custom_heuristic_interface
+from custom_eisenhower_manager import CustomEisenhowerManager, show_eisenhower_rules_interface
 
 # Added missing imports for undefined references
 from config.constants import EISEN_OPTIONS
@@ -214,11 +216,26 @@ def cases_classification():
 def manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_sub, apply_label_to_selection, change_color):
     """Clasificación manual de actividades y subactividades"""
 
+    # Obtener gestor de reglas personalizadas
+    heuristic_manager = st.session_state.get("heuristic_manager")
+    
+    # Combinar TODAS las subactividades (predefinidas + personalizadas)
+    if heuristic_manager:
+        all_sub_combined = list(all_sub)
+        
+        for activity in heuristic_manager.get_all_activities():
+            for subact in heuristic_manager.get_all_subactivities(activity):
+                sub_label = f"{subact} - {activity}"
+                if sub_label not in all_sub_combined:
+                    all_sub_combined.append(sub_label)
+    else:
+        all_sub_combined = all_sub
+
+    # === FUNCIONES HELPER (sin cambios) ===
     def update_last_3_buttons(core, subact):
         if not "last_acts" in st.session_state:
             return
-
-        dicc_aux = {"core_act": core, "subact":subact}
+        dicc_aux = {"core_act": core, "subact": subact}
         if dicc_aux not in st.session_state.last_acts:
             if len(st.session_state.last_acts) > 2:
                 st.session_state.last_acts.pop(0)
@@ -234,30 +251,31 @@ def manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_s
     def save_all_select():
         try:
             selected = st.session_state.all_select
+            if not selected:
+                return
             split_selection = selected.split(" - ")
-
             if len(split_selection) == 2:
-                seleccion_core_act = split_selection[1]
                 seleccion_subact = split_selection[0]
-
+                seleccion_core_act = split_selection[1]
                 apply_label_to_selection(Activity=seleccion_core_act, Subactivity=seleccion_subact)
                 update_last_3_buttons(seleccion_core_act, seleccion_subact)
                 st.session_state.all_select = None
-
         except Exception as e:
             logging.exception(f"There was an error saving all_select", exc_info=e)
             st.error("Error saving")
 
     def save_select(core):
         try:
-            subact = st.session_state[core]
-            apply_label_to_selection(Activity=core, Subactivity=subact)
-            update_last_3_buttons(core, subact)
-            st.session_state[core] = None
+            subact = st.session_state.get(core)
+            if subact:
+                apply_label_to_selection(Activity=core, Subactivity=subact)
+                update_last_3_buttons(core, subact)
+                st.session_state[core] = None
         except Exception as e:
             logging.exception(f"There was an error saving select {core}", exc_info=e)
             st.error("Error saving")
 
+    # === LAST SUBACTIVITIES ===
     if len(st.session_state.last_acts) > 0:
         with st.container():
             st.markdown("### Last Subactivities")
@@ -266,27 +284,55 @@ def manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_s
             for activity in ll:
                 if activity['subact'] is not None and activity['subact'] not in subacts:
                     subacts.append(activity['subact'])
-                    st.button(activity['subact'], key=f'boton_{activity["subact"]}', on_click=save_button, args=(activity['core_act'], activity['subact']), use_container_width=True)
-                    change_color('button', activity['subact'], 'black', dicc_core_color[activity['core_act']])
+                    st.button(
+                        activity['subact'], 
+                        key=f'boton_{activity["subact"]}', 
+                        on_click=save_button, 
+                        args=(activity['core_act'], activity['subact']), 
+                        use_container_width=True
+                    )
+                    if activity['core_act'] in dicc_core_color:
+                        change_color('button', activity['subact'], 'black', dicc_core_color[activity['core_act']])
 
-    st.selectbox("Search all subactivities", key="all_select", options = all_sub, index=None, placeholder="Search all subactivities", label_visibility='collapsed', on_change=save_all_select)
+    # === BUSCADOR UNIVERSAL (incluye predefinidas + personalizadas) ===
+    st.selectbox(
+        "Search all subactivities", 
+        key="all_select", 
+        options=all_sub_combined,  # Ya incluye personalizadas
+        index=None, 
+        placeholder="Search all subactivities", 
+        label_visibility='collapsed', 
+        on_change=save_all_select
+    )
 
+    # === SOLO CATEGORÍAS PREDEFINIDAS (sin sección custom separada) ===
     for category in dicc_core.keys():
         with st.container():
             st.markdown(f"### {category}")
             for activity in dicc_core[category]:
                 core_act = activity['core_activity']
-                color = dicc_core_color[core_act]
+                
+                # Combinar subactividades predefinidas + personalizadas para esta actividad
+                combined_subacts = list(dicc_subact[core_act])
+                
+                if heuristic_manager:
+                    custom_subs = heuristic_manager.get_all_subactivities(core_act)
+                    for sub in custom_subs:
+                        if sub not in combined_subacts:
+                            combined_subacts.append(sub)
+                
                 st.selectbox(
                     core_act,
                     key=core_act,
-                    options=dicc_subact[core_act],
+                    options=combined_subacts,
                     index=None,
                     placeholder=core_act,
                     label_visibility='collapsed',
                     on_change=save_select,
                     args=(core_act,)
                 )
+    
+    # ELIMINADO: Sección "Custom Activities" completa
 
 def automated_classification(view_options, mensaje_container):
     """Clasificación automática con IA"""
@@ -353,22 +399,38 @@ def automated_classification(view_options, mensaje_container):
         st.form_submit_button("Start classification", on_click=run_auto_classify)
 
 def heuristic_prediction():
-    """Clasificación heurística basada en apps y títulos"""
+    """Clasificación heurística basada en apps y títulos - CON REGLAS PERSONALIZADAS"""
+    
+    # Inicializar gestor de reglas
+    if "heuristic_manager" not in st.session_state:
+        st.session_state.heuristic_manager = CustomHeuristicManager()
+    
     def run_prediction():
+        heuristic_manager = st.session_state.heuristic_manager
         all = st.session_state.df_original
         st.session_state.undo_df = all.copy()
 
         tipo_datos = st.session_state.heuristic_data_type
         if tipo_datos == "Selected rows":
+            if 'filas_seleccionadas' not in st.session_state:
+                st.error("No rows selected")
+                return
             selected_ids = st.session_state.filas_seleccionadas['ID'].tolist()
             to_classify = all[all["ID"].isin(selected_ids)]
         else:
             to_classify = all
 
-        results = to_classify.apply(lambda row: clasificar_por_heuristica(row['App'], row['Merged_titles']), axis=1, result_type='expand')
+        # USAR EL GESTOR DE REGLAS PERSONALIZADAS
+        results = to_classify.apply(
+            lambda row: heuristic_manager.match_heuristic_rule(row['App'], row['Merged_titles']), 
+            axis=1, 
+            result_type='expand'
+        )
+        
         if results.empty:
             st.warning("There are no rows to label with heuristics.")
             return
+            
         all.loc[to_classify.index, 'PredictedSubactivity'] = results[0]
         all.loc[to_classify.index, 'PredictedActivity'] = results[1]
 
@@ -380,12 +442,44 @@ def heuristic_prediction():
         mask_act = mask_act & all['PredictedActivity'].notna()
         all.loc[mask_act, 'Activity'] = all.loc[mask_act, 'PredictedActivity']
 
-        st.success("Heuristic prediction successfully applied.")
-
+        st.success("Heuristic prediction successfully applied with custom rules.")
+    
     with st.form(key='heuristic_prediction_form', clear_on_submit=True):
-        st.markdown("This tool predicts a base category for each activity based on the app and window title.")
+        st.markdown("This tool predicts a base category for each activity based on the app and window title using **your custom rules + default rules**.")
         st.selectbox("Choose what data you want to classify", ["All", "Selected rows"], key="heuristic_data_type", index=0)
+
         st.form_submit_button("Predict categories", on_click=run_prediction)
+
+def custom_rules_management_section():
+    """Sección para gestionar reglas personalizadas"""
+    
+    if "heuristic_manager" not in st.session_state:
+        st.session_state.heuristic_manager = CustomHeuristicManager()
+    
+    # Inicializar estado si no existe
+    if 'show_rule_management' not in st.session_state:
+        st.session_state.show_rule_management = False
+    
+    # Botón toggle
+    if st.button(
+        "⚙️ Manage Custom Heuristic Rules", 
+        use_container_width=True, 
+        type="secondary"
+    ):
+        st.session_state.show_rule_management = not st.session_state.show_rule_management
+    
+    # Mostrar interfaz
+    if st.session_state.show_rule_management:
+        st.markdown("### ⚙️ Custom Heuristic Rules Manager")
+        show_custom_heuristic_interface(st.session_state.heuristic_manager)
+    
+    # Estadísticas
+    heuristic_manager = st.session_state.heuristic_manager
+    active_rules = len(heuristic_manager.get_active_rules())
+    total_custom = len(heuristic_manager.user_rules)
+    
+    if total_custom > 0:
+        st.info(f"📊 Custom rules: {active_rules} active out of {total_custom} total")
 
 def heuristic_classification():
     """Expansión heurística de etiquetas"""
@@ -620,15 +714,68 @@ def classify_eisenhower_heuristic():
         logging.exception("Error en clasificación heurística Eisenhower", exc_info=e)
         st.error("Unexpected error during heuristic classification.")
 
+
 def eisenhower_heuristic_sidebar():
     """Sidebar para clasificación heurística de Eisenhower"""
+    
+    # Inicializar gestor
+    if "eisenhower_manager" not in st.session_state:
+        st.session_state.eisenhower_manager = CustomEisenhowerManager()
+    
     with st.form(key="heuristic_eisenhower_form", clear_on_submit=True):
-        st.markdown("This module applies a heuristic classification (without GPT) to activities based on their subactivity.")
+        st.markdown("Apply heuristic classification using **your custom rules + default rules**")
+        
         if "df_original" not in st.session_state:
             st.warning("Upload a file to enable this option.")
             return
-        st.selectbox("Choose what data you want to classify", ["All", "Selected rows"], key="eisen_data_type_heuristic", index=0)
-        st.form_submit_button("🏷️ Classify heuristically", on_click=classify_eisenhower_heuristic)
+        
+        st.selectbox(
+            "Choose what data you want to classify", 
+            ["All", "Selected rows"], 
+            key="eisen_data_type_heuristic", 
+            index=0
+        )
+        
+        st.form_submit_button("🏷️ Classify heuristically", on_click=classify_eisenhower_heuristic_custom)
+    
+    # Botón para gestionar reglas personalizadas
+    if st.button("⚙️ Manage Eisenhower Rules", use_container_width=True, type="secondary"):
+        st.session_state.show_eisenhower_rules = not st.session_state.get("show_eisenhower_rules", False)
+    
+    if st.session_state.get("show_eisenhower_rules", False):
+        show_eisenhower_rules_interface(st.session_state.eisenhower_manager)
+
+def classify_eisenhower_heuristic_custom():
+    """Clasificación heurística CON REGLAS PERSONALIZADAS"""
+    try:
+        eisenhower_manager = st.session_state.eisenhower_manager
+        df = st.session_state.df_original
+        st.session_state.undo_df = df.copy()
+
+        tipo_datos = st.session_state.eisen_data_type_heuristic
+        
+        if tipo_datos == "All":
+            to_classify = df[df['Subactivity'].notna() & df['Eisenhower'].isna()]
+        elif tipo_datos == "Selected rows":
+            selected_ids = st.session_state.filas_seleccionadas['ID'].tolist()
+            to_classify = df[df["ID"].isin(selected_ids) & df['Subactivity'].notna()]
+        else:
+            st.warning("Invalid data type.")
+            return
+
+        if to_classify.empty:
+            st.warning("No rows available for heuristic classification.")
+            return
+
+        # USAR EL GESTOR DE REGLAS PERSONALIZADAS
+        resultados = to_classify['Subactivity'].apply(eisenhower_manager.classify_eisenhower)
+        df.loc[to_classify.index, "Eisenhower"] = resultados
+        
+        st.success("Heuristic classification completed with custom rules.")
+        
+    except Exception as e:
+        logging.exception("Error in Eisenhower heuristic classification", exc_info=e)
+        st.error("Unexpected error during classification.")
 
 def display_improved_label_palette(selected_df, dicc_core, dicc_subact, dicc_core_color, all_sub, apply_label_to_selection, change_color, mensaje_container):
     """Paleta de etiquetas mejorada con el orden específico solicitado"""
@@ -659,7 +806,7 @@ def display_improved_label_palette(selected_df, dicc_core, dicc_subact, dicc_cor
         
         # 2.1 Manual
         if dicc_core and dicc_subact:
-            with st.expander("✋ **Manual Classification** - Full control", expanded=True):
+            with st.expander("✋ **Manual Classification** - Full control", expanded=False):
                 st.markdown("Select activities and assign categories manually")
                 manual_classification_sidebar(dicc_core, dicc_subact, dicc_core_color, all_sub, apply_label_to_selection, change_color)
         else:
@@ -668,17 +815,18 @@ def display_improved_label_palette(selected_df, dicc_core, dicc_subact, dicc_cor
         # 2.2 Automático
         if "df_original" in st.session_state:
             view_options = load_view_options()
-            with st.expander("🤖 **Automated Classification** - AI"):
+            with st.expander("🤖 **Automated Classification** - AI", expanded=False):
                 st.markdown("Use AI models for smart classification")
                 automated_classification(view_options, mensaje_container)
         
         # 2.3 Heurístico 1 - Predicción por App
-        with st.expander("🧠 **Heuristic Prediction** - Apps and titles"):
+        with st.expander("🧠 **Heuristic Prediction** - Apps and titles", expanded=False):
             st.markdown("Classify based on app names and window titles")
             heuristic_prediction()
+            custom_rules_management_section()
         
         # 2.4 Heurístico 2 - Expansión de etiquetas
-        with st.expander("🔗 **Label Expansion** - Smart fill"):
+        with st.expander("🔗 **Label Expansion** - Smart fill", expanded=False):
             st.markdown("Extend case labels to nearby activities")
             heuristic_classification()
         
@@ -687,12 +835,12 @@ def display_improved_label_palette(selected_df, dicc_core, dicc_subact, dicc_cor
         st.markdown("**Classify your activities by urgency and importance:**")
         
         # 4.1 Manual Eisenhower
-        with st.expander("✋ **Manual Eisenhower** - Direct control", expanded=True):
+        with st.expander("✋ **Manual Eisenhower** - Direct control", expanded=False):
             st.markdown("Select the quadrant manually for each activity")
             manual_eisenhower_classification(apply_label_to_selection)
         
         # 4.2 Automático Eisenhower
-        with st.expander("🤖 **Automated Eisenhower** - AI"):
+        with st.expander("🤖 **Automated Eisenhower** - AI", expanded=False):
             st.markdown("Automatic classification using GPT")
             with st.form(key="eisen_gpt_classification_form", clear_on_submit=True):
                 st.selectbox("Choose what data you want to classify", ["All", "Selected rows"], key="eisen_data_type", index=0)
@@ -702,7 +850,7 @@ def display_improved_label_palette(selected_df, dicc_core, dicc_subact, dicc_cor
                 st.form_submit_button("🏷️ Classify automatically", on_click=classify_eisenhower_auto)
         
         # 4.3 Heurístico Eisenhower
-        with st.expander("🧠 **Heuristic Eisenhower** - Automatic"):
+        with st.expander("🧠 **Heuristic Eisenhower** - Automatic", expanded=False):
             st.markdown("Heuristic classification based on patterns")
             eisenhower_heuristic_sidebar()
         

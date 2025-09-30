@@ -200,13 +200,25 @@ def asignar_color(s):
         else:
             activity = s.Activity
     
-    if activity and activity in dicc_core_color:
-        original_color = dicc_core_color[activity]
-        if original_color.startswith('#'):
-            r = int(original_color[1:3], 16)
-            g = int(original_color[3:5], 16)
-            b = int(original_color[5:7], 16)
-            base_color = f'rgba({r}, {g}, {b}, 0.3)'
+    if activity:
+        # Primero buscar en colores predefinidos
+        if activity in dicc_core_color:
+            original_color = dicc_core_color[activity]
+            if original_color.startswith('#'):
+                r = int(original_color[1:3], 16)
+                g = int(original_color[3:5], 16)
+                b = int(original_color[5:7], 16)
+                base_color = f'rgba({r}, {g}, {b}, 0.3)'
+        else:
+            # Si no está en predefinidos, buscar en personalizados
+            heuristic_manager = st.session_state.get("heuristic_manager")
+            if heuristic_manager:
+                custom_color = heuristic_manager.get_color_for_activity(activity)
+                if custom_color.startswith('#'):
+                    r = int(custom_color[1:3], 16)
+                    g = int(custom_color[3:5], 16)
+                    b = int(custom_color[5:7], 16)
+                    base_color = f'rgba({r}, {g}, {b}, 0.3)'
 
     return [f'background-color:{base_color}'] * len(s)
 
