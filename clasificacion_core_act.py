@@ -13,17 +13,12 @@ import streamlit as st
 import io
 
 from core_act import load_activities
-from heuristic_rules import HEURISTIC_RULES
 
-def apply_heuristic(app, title):
-    app = str(app).lower()
-    title = str(title).lower()
-    for rule in HEURISTIC_RULES:
-        for keyword in rule["keywords"]:
-            if keyword in app or keyword in title:
-                logging.debug(f"[DEBUG] Matched keyword '{keyword}' -> Subactivity: {rule['subactivity']}, Activity: {rule['activity']}")
-                return rule["subactivity"], rule["activity"]
-    return "Unclassified", None
+# clave = st.session_state.openai_key
+# organizacion = st.session_state.openai_org
+
+# SKLLMConfig.set_openai_key(clave)
+# SKLLMConfig.set_openai_org(organizacion)
 
 
 def simple_load_file(loaded_file=None, url_link=None, default_classification="No work-related", dayfirst=False):
@@ -33,10 +28,19 @@ def simple_load_file(loaded_file=None, url_link=None, default_classification="No
     else:
         uploaded_file = url_link
 
-    df = pd.read_csv(uploaded_file,sep=";")
+    df = pd.read_csv(uploaded_file, sep=";")
 
-    if "Subactivity" not in df.columns or df["Subactivity"].isna().all():
-        df["Subactivity"], df["Activity"] = zip(*df.apply(lambda row: apply_heuristic(row.get("App", ""), row.get("Title", "")), axis=1))
+    # Normalizar nombres de columnas (Tockler usa beginDate/endDate)
+    if 'beginDate' in df.columns:
+        df.rename(columns={'beginDate': 'Begin'}, inplace=True)
+    if 'endDate' in df.columns:
+        df.rename(columns={'endDate': 'End'}, inplace=True)
+    if 'app' in df.columns:
+        df.rename(columns={'app': 'App'}, inplace=True)
+    if 'title' in df.columns:
+        df.rename(columns={'title': 'Title'}, inplace=True)
+    elif 'taskName' in df.columns:
+        df.rename(columns={'taskName': 'Title'}, inplace=True)
 
     df['Begin'] = pd.to_datetime(df['Begin'], dayfirst=dayfirst, errors='coerce')
     df['End'] = pd.to_datetime(df['End'], dayfirst=dayfirst, errors='coerce')
@@ -47,7 +51,7 @@ def simple_load_file(loaded_file=None, url_link=None, default_classification="No
         if "Subactivity" in df.columns:
             result = df
         else:
-            dicc_core, dicc_subact, dicc_map_subact, dicc_core_color = load_activities()
+            dicc_core, dicc_subact, dicc_map_subact, dicc_core_color = load_activities()            
             df["Subactivity"] = df["Activity"]
             df["Activity"] = df["Subactivity"].map(dicc_map_subact)
             result = df
@@ -55,16 +59,22 @@ def simple_load_file(loaded_file=None, url_link=None, default_classification="No
         df["Activity"] = df["Zero_shot_classification"]
         result = df
     else: # Tockler import
+        # Asegurar que Title y App existen
+        if 'App' not in df.columns:
+            df['App'] = "Unknown"
+        if 'Title' not in df.columns:
+            df['Title'] = "Unknown"
+            
         #Adds a new column that specifies whether the type of recording is work or computer break.
         df['Type'] = "Computer work"
         # Set 'Type' to 'NATIVE - NO_TITLE' where 'Title' is 'NATIVE - NO_TITLE'
-        df['Type'] = np.where(df['Title'].str.contains('NO_TITLE'), 'NO_TITLE', df['Type'])
-        df['Activity'] = default_classification
+        df['Type'] = np.where(df['Title'].str.contains('NO_TITLE', na=False), 'NO_TITLE', df['Type'])
+        df['Activity'] = None
 
         result = df[df['Type'] == 'Computer work'].copy()
 
     if "Merged_titles" not in result.columns:
-        result['Merged_titles'] = df['App'] +" - "+ df["Title"]
+        result['Merged_titles'] = result['App'].astype(str) + " - " + result["Title"].astype(str)
 
     if "Duration" not in result.columns:
         result['Duration'] = (result['End'] - result['Begin'])/pd.Timedelta('1s')
@@ -74,9 +84,12 @@ def simple_load_file(loaded_file=None, url_link=None, default_classification="No
 
     if "Case" not in result.columns:
         result["Case"] = None
+    
+    if "Eisenhower" not in result.columns:
+        result["Eisenhower"] = None
 
     if "App" not in result.columns:
-        splitted = df['Merged_titles'].str.split(' - ', n=1, expand=True)
+        splitted = result['Merged_titles'].str.split(' - ', n=1, expand=True)
         result["App"] = splitted[0]
 
     logging.info(result.columns)
@@ -87,12 +100,12 @@ def simple_load_file(loaded_file=None, url_link=None, default_classification="No
 def classify(df, openai_key=None, openai_org=None):
     groups = (df['End'] != df['Begin'].shift(1)).cumsum()
     groups.name = "groups"
-    merged_titles = df['Merged_titles'].astype(str).groupby(groups).apply(lambda x: ';'.join(x))
+    merged_titles = df['Merged_titles'].groupby(groups).apply(lambda x: ';'.join(x))
     X = merged_titles.tolist()
     labels = gpt_predict_labels(X, openai_key, openai_org)
     result = pd.merge(left=groups, left_on="groups", right=pd.Series(labels, name="labels", index=pd.RangeIndex(start=1, stop=len(labels)+1)), right_index=True)
     return result['labels']
-
+    
 
 def prepare_for_classification(df):
     #We add new rows when there is a gap in the time between two rows, and add the rows to the data, with the category "Computer break".
@@ -126,9 +139,9 @@ def prepare_for_classification(df):
             'End': group['End'].iloc[-1],
             'App': group['App'].iloc[0],
             'Type': group['Type'].iloc[0],
-            'Duration': group['Duration'].sum()
+            'Duration': group['Duration'].sum()  
         })
-
+    
     # Group by 'Type' and 'Group', and apply the custom aggregation function
     result_df = df_merged_titles.groupby(['Type', 'Group']).apply(custom_aggregation).reset_index(drop=True)
 
@@ -158,7 +171,7 @@ def prepare_for_classification(df):
 
     filtered_df = result_df[result_df['Type'] == 'Computer work'].copy()
 
-    return filtered_df
+    return filtered_df    
 
 
 
@@ -217,7 +230,7 @@ def load_uploaded_file(loaded_file):
             'Duration': group['Duration'].sum()  # Assuming you want to sum the durations
             # Add more columns as needed
         })
-
+    
     # Group by 'Type' and 'Group', and apply the custom aggregation function
     result_df = df_merged_titles.groupby(['Type', 'Group']).apply(custom_aggregation).reset_index(drop=True)
 
@@ -251,7 +264,7 @@ def load_uploaded_file(loaded_file):
 
 
 def gpt_classification(filtered_df, openai_key=None, openai_org=None):
-
+    
     #Apply Zero-Shot Text Classification.
 
     # Assuming result_df is a DataFrame with a column "Merged_titles"
@@ -292,52 +305,86 @@ def gpt_predict_labels_fake(X, openai_key=None, openai_org=None):
         "Research proposal" ,
         "Research plan" ,
         "Performing research" ,
-        "Doctoral thesis"
+        "Doctoral thesis" 
     ]
 
     return [core_activities[randrange(len(core_activities))] for x in X]
 
 
 
-
+    
 
 def gpt_predict_labels(X, openai_key=None, openai_org=None):
-    from core_act import load_activities
-    dicc_core, dicc_subact, dicc_map_subact, dicc_core_color = load_activities()
-    core_activities = list(set(dicc_map_subact.values()))
+
+    core_activities = {
+        "Faculty plan/capacity group plan": "Provide input and collect and document ideas and priorities from the chair",
+        "Management of education and research": "Managing and supervising the education and research corresponding to the chair",
+        "Human Resources policy": "Execution of the HR policies established by the dean within the chair",
+        "Organizational matters": "Following organizational policies regarding HR matters, finances, IT and security",
+        "Programme development" : "Ensuring the development of academic teaching programmes tailored to the needs of students and society",
+        "Acquisition of contract teaching and research" : "Acquiring and developing contract teaching and research",
+        "Accountability for contract teaching and research" :  "Assessing and correcting the realisation of contract research and teaching",
+        "Advancing/communicating scientific knowledge and insight": "Representing as well as encouraging the advancement of knowledge and insight in their own field of expertise in respect of the scientific community, society and the public and private sectors if possible.",
+        "Working groups and committees": "Participating in and/or managing committees or working groups, both internally and externally, as well as carrying out assigned management and administrative duties as the representative of the chair",
+        "Contribution to the research group or lab": "Contributing to the group in various ways, e.g. through exchanging ideas, lessons learned, mentoring more junior colleagues, etc.",
+        "Organization of (series of) events": "Organizing events or series of external events, including scientific events such as conferences and workshops, but also outreach. ",
+        "Provision of education": "Ensuring the provision and quality of course components",
+        "Student supervision" : "Ensuring the supervision and support of students as well as assessing students in the execution and progress of assignments",
+        "PhD candidates" : "Appointing, supervising and assessing PhD candidates as a Supervisor in the execution and progress of doctoral research",
+        "Education development" : "Analysing the level of the students and the needs of society",
+        "Testing" :  "Testing learning outcomes using the assessment methods developed and/or approved by the teaching institute",
+        "Education evaluation" : "Contributing to the evaluation of the format and the provision of course components as well as submitting proposals regarding potential improvements in the teaching and/or content of these course components",
+        "Education coordination" : "Coordinating (the development of) a programme and the provision of assigned course components",
+        "Research development" : "Initiating and developing scientific research programmes based on developments in their own field and in line with societal needs and opportunities for valorisation of the knowledge to be developed",
+        "Assessment of research" : "Contributing to the assessment of research in the community",
+        "Execution of research" : "Ensuring the execution and quality of research",
+        "Publication of research" : "Publishing research results",
+        "Research coordination" : "Coordinating and monitoring the cohesion within a research programme and monitoring the progress of their own research",
+        "Research proposal" : "Becoming familiar with and defining the subject and theoretical framework",
+        "Research plan" : "Formulating a research question and working hypotheses as well as determining research methods and target groups",
+        "Performing research" : "Collecting, analysing and interpreting research data, both empirically and theoretically",
+        "Doctoral thesis" : "Writing a doctoral thesis in consultation with the supervisor"
+
+    }
+
 
     prompt_template = (
-        "You are a productivity assistant. Your task is to classify user computer activity based only on the application name and window title.\n\n"
-        "Below are examples:\n"
-        "Example 1:\n"
-        "- WhatsApp - No title\n"
-        "→ Label: Communication\n\n"
-        "Example 2:\n"
-        "- VSCode - tfm_analysis.py\n"
-        "- Chrome - Scholar articles\n"
-        "→ Label: Programming\n\n"
-        "Example 3:\n"
-        "- YouTube - Top 10 Netflix series\n"
-        "→ Label: Distraction\n\n"
-        "Example 4:\n"
-        "- ChatGPT - Research question brainstorming\n"
-        "→ Label: AI Consultation\n\n"
-        "Now classify the following window titles:\n{}\n\n"
-        "Choose only from these labels:\n{}\n"
-        "Respond with ONE label only, and nothing else."
+        "I am an assistant professor at a university in The Netherlands and I have been recording my computer behavior. "
+        "I had a tool record the computer windows that I had active at a certain time. "
+        "I want you to try to work out what task I was working on during that time.\n\n"
+        "You will be provided with the following information:\n"
+        "1. One or more window titles. The titles include the app and the title of the screen. They are ordered in the order that they occurred.\n"
+        "2. A list of task categories that you may choose from.\n\n"
+        "3. The description of each task category.\n\n"
+        "Perform the following tasks:\n"
+        "1. Identify to which category the provided window titles belong with the highest probability.\n"
+        "2. Assign the provided text to that category.\n\n"
+        "Window titles:\n{}\n\nCandidate labels:\n{}"
+        "Output ONLY the name of the category NOT the description"
     )
 
+    candidate_labels_2 = [f"{key}: {value}" for key, value in core_activities.items()]
+    candidate_labels = [key for key,value in core_activities.items()]
+
+    # Format the prompt for each instance in the dataset
     formatted_prompts = [
-        prompt_template.format("\n".join(f"- {title}" for title in text.split(";")), ", ".join(core_activities))
+        prompt_template.format("\n".join(f"- {title}" for title in text.split(";")), "\n".join(candidate_labels_2))
         for text in X
     ]
 
+    # Set the maximum number of tokens you want to keep
     max_tokens = 4000
+
+    # Truncate each text in the formatted_prompts list to the specified number of tokens
     truncated_prompts = [prompt[:max_tokens] for prompt in formatted_prompts]
 
+    # Create and fit the MultiLabelZeroShotGPTClassifier
     clf = ZeroShotGPTClassifier(openai_model="gpt-4-1106-preview", openai_key=openai_key, openai_org=openai_org)
-    clf.fit(truncated_prompts, [core_activities])
+    clf.fit(truncated_prompts, [candidate_labels])
 
+    # Predict labels for the truncated prompts
     labels = clf.predict(truncated_prompts)
 
     return labels
+
+

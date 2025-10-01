@@ -183,7 +183,7 @@ def _render_simple_tutorial():
     current_step = st.session_state["ONBOARDING_STEP"]
     
     # Use native Streamlit expander for the tutorial
-    with st.expander("🎓 Classification Tutorial", expanded=st.session_state.get("ONBOARDING_EXPANDER", True)):
+    with st.expander("🎓 Classification Tutorial", expanded=st.session_state.get("ONBOARDING_EXPANDER", False)):
         # Show current step
         st.markdown(f"### {steps[current_step]['title']}")
         st.markdown(steps[current_step]['content'])

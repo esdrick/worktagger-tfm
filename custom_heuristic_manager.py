@@ -1,7 +1,9 @@
 import json
 import streamlit as st
+import pandas as pd 
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
+
 
 class CustomHeuristicManager:
     """Gestor de reglas heurísticas personalizables por el usuario - Session State"""
@@ -210,6 +212,14 @@ class CustomHeuristicManager:
     
     def get_color_for_activity(self, activity: str) -> str:
         """Devuelve color para una actividad (predefinida o genera uno para personalizada)"""
+        
+        # Validar que activity sea un string válido PRIMERO
+        if activity is None or (isinstance(activity, float) and pd.isna(activity)):
+            return '#CCCCCC'  # Color gris por defecto para valores vacíos
+        
+        # Convertir a string por seguridad
+        activity = str(activity)
+        
         # Cargar colores predefinidos
         try:
             from core_act import load_activities

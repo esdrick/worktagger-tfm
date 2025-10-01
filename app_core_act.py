@@ -195,6 +195,10 @@ def asignar_color(s):
     
     activity = None
     if hasattr(s, 'Activity') and s.Activity is not None:
+        # NUEVO: Validar que no sea NaN
+        if isinstance(s.Activity, float) and pd.isna(s.Activity):
+            return [f'background-color:{base_color}'] * len(s)
+        
         if isinstance(s.Activity, list):
             activity = s.Activity[0] if len(s.Activity) == 1 else None
         else:
@@ -214,7 +218,7 @@ def asignar_color(s):
             heuristic_manager = st.session_state.get("heuristic_manager")
             if heuristic_manager:
                 custom_color = heuristic_manager.get_color_for_activity(activity)
-                if custom_color.startswith('#'):
+                if custom_color and custom_color.startswith('#'):
                     r = int(custom_color[1:3], 16)
                     g = int(custom_color[3:5], 16)
                     b = int(custom_color[5:7], 16)
@@ -385,16 +389,20 @@ apply_theme_compatible_styles()
 upload_expanded = "df_original" not in st.session_state
 with st.expander("📁 Upload your data", expanded=upload_expanded):
     st.markdown("""
-    Upload your Tockler data file (`CSV` or `tracker.db`) exported from Tockler.
-    You can obtain it from: **Tockler > Search > Export**, or locate `tracker.db` manually.
-
-    **Accepted formats**: `.csv`, `.db`
-    **Maximum size**: `200MB`
+    Upload your Tockler data exported as CSV.
+    
+    **How to export from Tockler:**
+    1. Open Tockler
+    2. Go to **Search**
+    3. Select your time period
+    4. Click **Export to CSV**
+    
+    **Accepted format**: `.csv`
     """)
 
     archivo_cargado = st.file_uploader(
-        label="Choose your Tockler data file",
-        type=["csv", "db"],
+        label="Choose your Tockler CSV file",
+        type=["csv"],
         key="source_file",
         on_change=changed_file
     )
@@ -418,6 +426,41 @@ with st.expander("📁 Upload your data", expanded=upload_expanded):
 # Contenedor de mensajes para mostrar estados de carga
 mensaje_container = st.empty()
 
+if "df_original" not in st.session_state:
+    st.session_state["current_page"] = 1
+    st.session_state["last_acts"] = []
+    st.session_state["next_day"] = None
+    st.session_state["a_datetime"] = None
+    st.session_state["undo_df"] = None
+    st.session_state["all_cases"] = set()
+
+    if archivo_cargado is not None or load_sample_data:
+        mensaje_container.write("Loading...")
+        if load_sample_data:
+            data_expanded = clasificacion_core_act.simple_load_file(url_link=SAMPLE_DATA_URL, dayfirst=True)
+        elif archivo_cargado is not None:
+            data_expanded = clasificacion_core_act.simple_load_file(loaded_file=archivo_cargado)
+        if filter_by_time > 0:
+            data_expanded = data_expanded[data_expanded['Duration'] >= filter_by_time]
+
+        mensaje_container.write("File loaded")
+
+        data_expanded['ID'] = range(1,len(data_expanded)+1)
+        data_expanded = data_expanded.reset_index(drop=True)
+        data_expanded['Begin'] = pd.to_datetime(data_expanded['Begin'], format='%d/%m/%Y %H:%M:%S')        
+        data_expanded['End'] = pd.to_datetime(data_expanded['End'], format='%d/%m/%Y %H:%M:%S')
+        data_expanded['Begin Time'] =data_expanded['Begin'].dt.strftime('%H:%M:%S')
+        data_expanded['Ending Time']= data_expanded['End'].dt.strftime('%H:%M:%S')
+        data_expanded['Change'] = False
+        if 'Eisenhower' not in data_expanded.columns:
+            data_expanded['Eisenhower'] = None
+
+        st.session_state.df_original = data_expanded[['Change','ID','Merged_titles','Begin','End','Begin Time','Ending Time', 'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App']]
+
+        st.session_state.all_cases = set(data_expanded["Case"].dropna().unique())
+
+        st.rerun()
+
 # Renderizar navbar solo si hay datos cargados
 if "df_original" in st.session_state:
     st.markdown("---")
@@ -433,123 +476,6 @@ else:
 
 # Persistir siempre la selección en el estado
 st.session_state["navbar_selection"] = selected_nav
-
-# --- Data Initialization ---
-if "df_original" not in st.session_state:
-    if archivo_cargado is not None or load_sample_data:
-        mensaje_container.write("Loading...")
-        
-        if load_sample_data:
-            data_expanded = clasificacion_core_act.simple_load_file(url_link=SAMPLE_DATA_URL, dayfirst=True)
-        elif archivo_cargado is not None and archivo_cargado.name.endswith(".db"):
-            import sqlite3
-            import tempfile
-            import os
-            
-            try:
-                # Save the uploaded .db file to a temporary file
-                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                    tmp_file.write(archivo_cargado.read())
-                    tmp_file_path = tmp_file.name
-                
-                # Connect to the SQLite database
-                conn = sqlite3.connect(tmp_file_path)
-                
-                # Select the required columns from the TrackItems table
-                query = """
-                SELECT id, app, taskName, title, url, color, beginDate, endDate
-                FROM TrackItems
-                WHERE beginDate IS NOT NULL AND endDate IS NOT NULL
-                """
-                df_sqlite = pd.read_sql_query(query, conn)
-                conn.close()
-                os.unlink(tmp_file_path)
-                
-                # Convert beginDate and endDate from ms since epoch to datetime
-                df_sqlite['Begin'] = pd.to_datetime(df_sqlite['beginDate'], unit='ms')
-                df_sqlite['End'] = pd.to_datetime(df_sqlite['endDate'], unit='ms')
-                df_sqlite['Duration'] = (df_sqlite['End'] - df_sqlite['Begin']).dt.total_seconds()
-                
-                # Filter out invalid durations
-                df_sqlite = df_sqlite[df_sqlite['Duration'] > 0]
-                
-                # Compose the expected columns
-                df_sqlite['Merged_titles'] = df_sqlite['title'].fillna('')
-                df_sqlite['App'] = df_sqlite['app'].fillna('Unknown')
-                df_sqlite['Activity'] = None
-                df_sqlite['Subactivity'] = None
-                df_sqlite['Case'] = None
-                df_sqlite['Eisenhower'] = None
-                df_sqlite['Change'] = False
-                df_sqlite['Begin Time'] = df_sqlite['Begin'].dt.strftime('%H:%M:%S')
-                df_sqlite['Ending Time'] = df_sqlite['End'].dt.strftime('%H:%M:%S')
-                df_sqlite['ID'] = range(1, len(df_sqlite) + 1)
-                
-                # Arrange columns as expected
-                df_sqlite = df_sqlite[[
-                    'Change', 'ID', 'Merged_titles', 'Begin', 'End', 'Begin Time', 'Ending Time',
-                    'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App'
-                ]]
-                data_expanded = df_sqlite
-                
-            except Exception as e:
-                st.error(f"Error processing SQLite file: {str(e)}")
-                st.stop()
-                
-        elif archivo_cargado is not None:
-            data_expanded = clasificacion_core_act.simple_load_file(loaded_file=archivo_cargado)
-            
-        # Procesar datos cargados
-        if filter_by_time > 0:
-            data_expanded = data_expanded[data_expanded['Duration'] >= filter_by_time]
-
-        mensaje_container.write("File loaded")
-
-        data_expanded['ID'] = range(1,len(data_expanded)+1)
-        data_expanded = data_expanded.reset_index(drop=True)
-        
-        # Only parse if not already datetime (i.e., only for CSVs)
-        if not (archivo_cargado is not None and archivo_cargado.name.endswith(".db")):
-            data_expanded['Begin'] = pd.to_datetime(data_expanded['Begin'], format='%d/%m/%Y %H:%M:%S')
-            data_expanded['End'] = pd.to_datetime(data_expanded['End'], format='%d/%m/%Y %H:%M:%S')
-            data_expanded['Begin Time'] = data_expanded['Begin'].dt.strftime('%H:%M:%S')
-            data_expanded['Ending Time'] = data_expanded['End'].dt.strftime('%H:%M:%S')
-            data_expanded['Change'] = False
-            data_expanded['Eisenhower'] = None
-            
-        expected_columns = ['Change', 'ID', 'Merged_titles', 'Begin', 'End', 'Begin Time', 'Ending Time', 'Duration', 'Activity', 'Subactivity', 'Case', 'Eisenhower', 'App']
-        available_columns = [col for col in expected_columns if col in data_expanded.columns]
-        st.session_state.df_original = data_expanded[available_columns]
-        st.session_state.all_cases = set(data_expanded["Case"].dropna().unique())
-
-        # Detectar si cambió el archivo cargado
-        if archivo_cargado is not None:
-            current_filename = archivo_cargado.name
-            if st.session_state.get("previous_file_name") != current_filename:
-                st.session_state["previous_file_name"] = current_filename
-
-                # 🔁 Al cambiar de archivo, vuelve a la pantalla principal y reinicia el tutorial
-                st.session_state["navbar_selection"] = "📋 Main Screen"
-                st.session_state["current_page"] = 1
-                st.session_state["ONBOARDING_ACTIVE"] = False
-                st.session_state["ONBOARDING_STEP"] = 0
-                st.session_state["ONBOARDING_COMPLETED"] = True  # evita que reaparezca automáticamente
-
-                st.rerun()
-
-        # Si se cargan datos de ejemplo, también simulamos un cambio de archivo y volvemos a HOME
-        if load_sample_data:
-            st.session_state["previous_file_name"] = "__SAMPLE__"
-            st.session_state["navbar_selection"] = "📋 Main Screen"
-            st.session_state["current_page"] = 1
-            st.session_state["ONBOARDING_ACTIVE"] = False
-            st.session_state["ONBOARDING_STEP"] = 0
-            st.session_state["ONBOARDING_COMPLETED"] = True
-            st.rerun()
-
-        if "file_loaded_once" not in st.session_state:
-            st.session_state["file_loaded_once"] = True
-            st.rerun()
 
 # --- Navigation and main content ---
 if "df_original" in st.session_state:
