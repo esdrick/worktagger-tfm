@@ -335,24 +335,36 @@ def show_custom_heuristic_interface(heuristic_manager: CustomHeuristicManager):
                     st.divider()
     
     with tab3:
-        st.markdown("#### Test Classification")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            test_app = st.text_input("Application name", placeholder="chrome.exe", key="test_app_input")
-        with col2:
-            test_title = st.text_input("Window title", placeholder="Zoom Meeting", key="test_title_input")
-        
-        if st.button("🧪 Test Classification"):
-            if test_app or test_title:
-                subact, act = heuristic_manager.match_heuristic_rule(test_app, test_title)
-                if subact and act:
-                    st.success(f"✅ **Result:** {subact} → {act}")
+        # Nuevo bloque usando st.form y session_state para testeo de reglas
+        with st.form("test_rule_form", clear_on_submit=False):
+            st.markdown("#### 🧪 Test Classification")
+            col1, col2 = st.columns(2)
+            with col1:
+                test_app_input = st.text_input("Application name", placeholder="chrome.exe", key="test_app_input_form")
+            with col2:
+                test_title_input = st.text_input("Window title", placeholder="Zoom Meeting", key="test_title_input_form")
+            
+            submitted = st.form_submit_button("Test Classification")
+            
+            if submitted:
+                if test_app_input or test_title_input:
+                    subact, act = heuristic_manager.match_heuristic_rule(test_app_input, test_title_input)
+                    if subact and act:
+                        st.session_state.test_result = f"{subact} → {act}"
+                    else:
+                        st.session_state.test_result = "⚠️ No matching rules found"
                 else:
-                    st.warning("⚠️ No matching rules found")
+                    st.session_state.test_result = "Enter at least the app or title"
+
+        if "test_result" in st.session_state:
+            result = st.session_state.test_result
+            if "→" in result:
+                st.success(f"✅ **Result:** {result}")
+            elif "⚠️" in result:
+                st.warning(result)
             else:
-                st.error("Enter at least the app or title")
-        
+                st.error(result)
+
         # Mostrar estadísticas
         st.markdown("#### Rules Statistics")
         total_rules = len(heuristic_manager.user_rules)
@@ -408,23 +420,18 @@ def show_custom_heuristic_interface(heuristic_manager: CustomHeuristicManager):
                     rules_preview = json.loads(content)
                     
                     st.success(f"📄 Valid file with {len(rules_preview)} rules")
-                    
-                    col_a, col_b = st.columns(2)
-                    
-                    with col_a:
-                        if st.button("🔄 Replace my rules", type="primary", key="replace_rules_btn"):
-                            if heuristic_manager.import_rules(content, replace=True):
-                                st.success("✅ Rules replaced")
-                                # Aquí SÍ necesitamos rerun porque cambió todo
-                                st.rerun()
-                    
-                    with col_b:
-                        if st.button("➕ Add to existing", key="add_rules_btn"):
-                            if heuristic_manager.import_rules(content, replace=False):
-                                st.success("✅ Rules added")
-                                # Aquí SÍ necesitamos rerun
-                                st.rerun()
-                
+
+                    # Botones de importación sin columnas, para evitar error de Streamlit
+                    if st.button("🔄 Replace my rules", type="primary", key="replace_rules_btn"):
+                        if heuristic_manager.import_rules(content, replace=True):
+                            st.success("✅ Rules replaced")
+                            st.rerun()
+
+                    if st.button("➕ Add to existing", key="add_rules_btn"):
+                        if heuristic_manager.import_rules(content, replace=False):
+                            st.success("✅ Rules added")
+                            st.rerun()
+
                 except json.JSONDecodeError:
                     st.error("❌ File is not valid JSON")
                 except Exception as e:

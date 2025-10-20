@@ -434,12 +434,12 @@ def heuristic_prediction():
         all.loc[to_classify.index, 'PredictedSubactivity'] = results[0]
         all.loc[to_classify.index, 'PredictedActivity'] = results[1]
 
-        mask_sub = all['Subactivity'].isna() | all['Subactivity'].str.startswith("Unspecified")
-        mask_sub = mask_sub & all['PredictedSubactivity'].notna()
-        all.loc[mask_sub, 'Subactivity'] = all.loc[mask_sub, 'PredictedSubactivity']
+        # Reemplazar actividades y subactividades solo si hay una nueva predicción
+        mask_sub = all['PredictedSubactivity'].notna()
+        mask_act = all['PredictedActivity'].notna()
 
-        mask_act = all['Activity'].isna() | all['Activity'].str.startswith("Unspecified")
-        mask_act = mask_act & all['PredictedActivity'].notna()
+        # Aplicar los reemplazos SOLO en las filas donde haya coincidencia
+        all.loc[mask_sub, 'Subactivity'] = all.loc[mask_sub, 'PredictedSubactivity']
         all.loc[mask_act, 'Activity'] = all.loc[mask_act, 'PredictedActivity']
 
         st.success("Heuristic prediction successfully applied with custom rules.")

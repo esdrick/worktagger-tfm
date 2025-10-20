@@ -180,23 +180,36 @@ def show_eisenhower_rules_interface(eisenhower_manager: CustomEisenhowerManager)
                             st.divider()
     
     with tab3:
-        st.markdown("#### Test Classification")
-        
-        test_subactivity = st.text_input(
-            "Subactivity to test",
-            placeholder="e.g., Email management"
-        )
-        
-        if st.button("🧪 Test Eisenhower Classification"):
-            if test_subactivity:
-                result = eisenhower_manager.classify_eisenhower(test_subactivity)
-                if result:
-                    st.success(f"✅ **Result:** {result}")
+        # Nuevo bloque con st.form y session_state
+        with st.form("test_eisenhower_form", clear_on_submit=False):
+            st.markdown("#### 🧪 Test Eisenhower Classification")
+            test_subactivity_input = st.text_input(
+                "Subactivity to test",
+                placeholder="e.g., Email management",
+                key="test_subactivity_input_form"
+            )
+            
+            submitted = st.form_submit_button("Test Eisenhower Classification")
+            
+            if submitted:
+                if test_subactivity_input:
+                    result = eisenhower_manager.classify_eisenhower(test_subactivity_input)
+                    if result:
+                        st.session_state.eisen_test_result = f"{result}"
+                    else:
+                        st.session_state.eisen_test_result = "⚠️ No matching rules found"
                 else:
-                    st.warning("⚠️ No matching rules found")
+                    st.session_state.eisen_test_result = "Enter a subactivity to test"
+
+        if "eisen_test_result" in st.session_state:
+            result = st.session_state.eisen_test_result
+            if "⚠️" in result:
+                st.warning(result)
+            elif result:
+                st.success(f"✅ **Result:** {result}")
             else:
-                st.error("Enter a subactivity to test")
-        
+                st.error(result)
+
         # Estadísticas
         st.markdown("#### Rules Statistics")
         total_rules = len(eisenhower_manager.user_rules)
@@ -254,19 +267,20 @@ def show_eisenhower_rules_interface(eisenhower_manager: CustomEisenhowerManager)
                     
                     st.success(f"📄 Valid file with {len(rules_preview)} rules")
                     
-                    col_a, col_b = st.columns(2)
-                    
-                    with col_a:
-                        if st.button("🔄 Replace", type="primary", key="replace_eisen_btn"):
-                            if eisenhower_manager.import_rules(content, replace=True):
-                                st.success("✅ Rules replaced")
-                                st.rerun()
-                    
-                    with col_b:
-                        if st.button("➕ Add", key="add_eisen_btn"):
-                            if eisenhower_manager.import_rules(content, replace=False):
-                                st.success("✅ Rules added")
-                                st.rerun()
+                    with st.container():
+                        col_a, col_b = st.columns(2)
+
+                        with col_a:
+                            if st.button("🔄 Replace", type="primary", key="replace_eisen_btn"):
+                                if eisenhower_manager.import_rules(content, replace=True):
+                                    st.success("✅ Rules replaced")
+                                    st.rerun()
+
+                        with col_b:
+                            if st.button("➕ Add", key="add_eisen_btn"):
+                                if eisenhower_manager.import_rules(content, replace=False):
+                                    st.success("✅ Rules added")
+                                    st.rerun()
                 
                 except json.JSONDecodeError:
                     st.error("❌ Invalid JSON file")
