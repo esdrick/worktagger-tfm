@@ -1,6 +1,6 @@
 # export_utils.py
 from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
@@ -8,9 +8,28 @@ import io
 import pandas as pd
 from datetime import datetime
 import streamlit as st
+import plotly.graph_objects as go
+import plotly.express as px
+import tempfile
+import os
+
+# Lista global para archivos temporales
+temp_files = []
+
+def save_plotly_to_temp(fig, width=600, height=400):
+    """Guarda figura Plotly y registra para limpieza"""
+    global temp_files
+    tmpfile = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    tmpfile.close()
+    fig.write_image(tmpfile.name, format='png', width=width, height=height)
+    temp_files.append(tmpfile.name)
+    return tmpfile.name
 
 def generate_pdf_report():
     """Genera PDF completo del análisis"""
+    global temp_files
+    temp_files = []  # Reset
+    
     buffer = io.BytesIO()
     
     doc = SimpleDocTemplate(
@@ -25,13 +44,23 @@ def generate_pdf_report():
     story = []
     styles = getSampleStyleSheet()
     
-    # Añadir contenido
-    story = add_title_page(story, styles)
-    story = add_summary_section(story, styles)
-    story = add_eisenhower_section(story, styles)
-    story = add_activity_dashboard_section(story, styles)
+    try:
+        # Añadir contenido
+        story = add_title_page(story, styles)
+        story = add_summary_section(story, styles)
+        story = add_eisenhower_section(story, styles)
+        story = add_activity_dashboard_section(story, styles)
+        
+        doc.build(story)
+    finally:
+        # Limpiar archivos temporales
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+            except:
+                pass
     
-    doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -145,7 +174,6 @@ def add_eisenhower_section(story, styles):
     time_by_quadrant = df_classified.groupby('Eisenhower')['Duration'].sum() / 60  # minutos
     count_by_quadrant = df_classified.groupby('Eisenhower').size()
     
-    # POR ESTE MAPEO CORRECTO:
     quadrant_descriptions = {
         'I: Urgent & Important': 'Q1: Urgent & Important (DO)',
         'II: Not urgent but Important': 'Q2: Not Urgent & Important (SCHEDULE)',
@@ -157,7 +185,6 @@ def add_eisenhower_section(story, styles):
     quadrant_data = [['Quadrant', 'Activities', 'Time (min)', 'Time (hours)', 'Percentage']]
     total_time = time_by_quadrant.sum()
     
-    # Y cambiar el bucle por:
     for quadrant in ['I: Urgent & Important', 'II: Not urgent but Important', 'III: Urgent but Not important', 'IV: Not urgent & Not important']:
         time_min = time_by_quadrant.get(quadrant, 0)
         time_hours = time_min / 60
@@ -202,7 +229,7 @@ def add_eisenhower_section(story, styles):
     if total_time > 0:
         productive_time = time_by_quadrant.get('I: Urgent & Important', 0) + time_by_quadrant.get('II: Not urgent but Important', 0)
         unproductive_time = time_by_quadrant.get('IV: Not urgent & Not important', 0)
-        efficiency = (productive_time / total_time * 100) if total_time > 0 else 0  # AÑADIR ESTA LÍNEA
+        efficiency = (productive_time / total_time * 100) if total_time > 0 else 0
         
         productivity_text = f"""
         <b>Productivity Analysis:</b><br/>
@@ -218,7 +245,7 @@ def add_eisenhower_section(story, styles):
     return story
 
 def add_activity_dashboard_section(story, styles):
-    """Sección del dashboard de actividades"""
+    """Sección del dashboard de actividades CON GRÁFICOS EN COLORES"""
     df = st.session_state.df_original
     
     section_title = ParagraphStyle(
@@ -248,6 +275,101 @@ def add_activity_dashboard_section(story, styles):
     subact_summary['Duration_hours'] = subact_summary['Duration'] / 3600
     subact_summary = subact_summary.sort_values('Duration_minutes', ascending=False)
     
+    # ========== GRÁFICO 1: Distribución por Subactividad CON COLORES ==========
+    top_10 = subact_summary.head(10).copy()
+    
+    # PALETA DE COLORES PROFESIONAL
+    color_palette = [
+        '#003366',  # Azul oscuro
+        '#F59E0B',  # Naranja
+        '#10B981',  # Verde
+        '#EF4444',  # Rojo
+        '#8B5CF6',  # Púrpura
+        '#06B6D4',  # Cyan
+        '#F97316',  # Naranja oscuro
+        '#14B8A6',  # Teal
+        '#EC4899',  # Rosa
+        '#6366F1'   # Índigo
+    ]
+    
+    # Truncar nombres largos
+    top_10['Subactivity_short'] = top_10['Subactivity'].apply(
+        lambda x: x[:40] + '...' if len(str(x)) > 40 else str(x)
+    )
+    
+    fig_subact = go.Figure(data=[go.Pie(
+        labels=top_10['Subactivity_short'],
+        values=top_10['Duration_minutes'],
+        hole=0.4,
+        textinfo='percent',
+        textposition='inside',
+        textfont=dict(size=11, color='white'),
+        marker=dict(
+            colors=color_palette[:len(top_10)],
+            line=dict(color='#FFFFFF', width=2)
+        ),
+        hovertemplate='<b>%{label}</b><br>%{value:.0f} min<br>%{percent}<extra></extra>'
+    )])
+    
+    fig_subact.update_layout(
+        title={
+            'text': "Top 10 Subactivities by Time",
+            'x': 0.5,
+            'xanchor': 'center',
+            'font': dict(size=14, color='#003366')
+        },
+        height=450,
+        width=650,
+        showlegend=True,
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.02,
+            font=dict(size=9)
+        ),
+        margin=dict(t=60, b=20, l=20, r=150)
+    )
+    
+    img_path = save_plotly_to_temp(fig_subact, 650, 450)
+    story.append(Image(img_path, width=5.5*inch, height=3.75*inch))
+    story.append(Spacer(1, 20))
+    # ==============================================================
+    
+    # ========== GRÁFICO 2: Evolución temporal CON COLORES ==========
+    if 'Begin' in df.columns:
+        df_subact['Date'] = pd.to_datetime(df_subact['Begin']).dt.date
+        df_line = df_subact.groupby('Date')['Duration'].sum().reset_index()
+        df_line['Duration (min)'] = df_line['Duration'] / 60
+        
+        fig_line = px.line(
+            df_line,
+            x='Date',
+            y='Duration (min)',
+            markers=True,
+            title="Daily Activity Evolution"
+        )
+        fig_line.update_traces(
+            line_color='#003366',
+            marker=dict(size=8, color='#F59E0B'),
+            line=dict(width=3)
+        )
+        fig_line.update_layout(
+            height=350,
+            width=600,
+            margin=dict(t=50, b=40, l=50, r=20),
+            xaxis_title="Date",
+            yaxis_title="Duration (min)",
+            title_font=dict(size=14, color='#003366'),
+            plot_bgcolor='#F8F9FA'
+        )
+        
+        img_path = save_plotly_to_temp(fig_line, 600, 350)
+        story.append(Image(img_path, width=5*inch, height=2.92*inch))
+        story.append(Spacer(1, 20))
+    # ==================================================
+    
     # Top 10 subactividades
     top_subactivities = subact_summary.head(10)
     
@@ -270,7 +392,7 @@ def add_activity_dashboard_section(story, styles):
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#003366')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('ALIGN', (0, 1), (0, -1), 'LEFT'),  # Align subactivity names to left
+        ('ALIGN', (0, 1), (0, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
